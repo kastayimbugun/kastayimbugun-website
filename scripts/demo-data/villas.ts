@@ -1,4 +1,6 @@
-import type { Villa } from "./types";
+// Bu dosya artık uygulamada kullanılmıyor — yalnızca ilk aktarımın kaynağı.
+// Gerçek veri Supabase'de; değişiklikler oradan yapılır.
+import type { Villa } from "../../src/lib/types.ts";
 
 /** Placeholder gallery images — swap these for real villa photos later. */
 const img = (seed: string, n: number, w = 1200, h = 800) =>

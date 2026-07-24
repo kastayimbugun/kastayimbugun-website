@@ -5,25 +5,28 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import VillaCard from "./VillaCard";
 import { useI18n } from "@/lib/i18n";
-import { getVilla } from "@/lib/villas";
+import { CategoryIcon } from "@/lib/categoryIcons";
 import type { Villa } from "@/lib/types";
-import type { VillaCategory } from "@/lib/categories";
+import type { Category } from "@/lib/data/categories";
 
 export default function CategorySection({
   category,
+  allVillas,
   tinted = false,
 }: {
-  category: VillaCategory;
+  category: Category;
+  /** Sunucudan gelen villa listesi — kategori slug'ları buradan çözülür */
+  allVillas: Villa[];
   tinted?: boolean;
 }) {
   const { t, lang } = useI18n();
-  const Icon = category.icon;
   const scroller = useRef<HTMLDivElement>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
 
+  const bySlug = new Map(allVillas.map((v) => [v.slug, v]));
   const villas = category.villaSlugs
-    .map(getVilla)
+    .map((slug) => bySlug.get(slug))
     .filter((v): v is Villa => Boolean(v));
 
   const update = () => {
@@ -51,7 +54,7 @@ export default function CategorySection({
         <div className="flex items-end justify-between gap-4">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-              <Icon className="h-6 w-6" />
+              <CategoryIcon name={category.iconName} className="h-6 w-6" />
             </span>
             <div>
               <h2 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">

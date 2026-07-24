@@ -3,17 +3,21 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
-import { villaCategories } from "@/lib/categories";
+import type { Category } from "@/lib/data/categories";
 
 const short = (s: string) => s.replace(/ Villaları$| Villalar$| Villas$/, "");
 
-export default function CategoryBrowser() {
+export default function CategoryBrowser({
+  categories,
+}: {
+  categories: Category[];
+}) {
   const { lang } = useI18n();
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-        {villaCategories.map((cat) => {
+        {categories.map((cat) => {
           const label = short(lang === "tr" ? cat.titleTr : cat.titleEn);
           return (
             <Link

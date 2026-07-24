@@ -6,8 +6,9 @@ import { SlidersHorizontal, X, Search } from "lucide-react";
 import VillaCard from "./VillaCard";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
-import { villas, regions } from "@/lib/villas";
-import type { AmenityKey } from "@/lib/types";
+import type { AmenityKey, Villa } from "@/lib/types";
+import type { Region } from "@/lib/data/villas";
+import type { Category } from "@/lib/data/categories";
 import { amenityIcons } from "@/lib/amenityIcons";
 
 const filterAmenities: AmenityKey[] = [
@@ -23,9 +24,21 @@ const filterAmenities: AmenityKey[] = [
 
 type Sort = "featured" | "priceAsc" | "priceDesc" | "rating";
 
-export default function VillaListClient() {
+export default function VillaListClient({
+  villas,
+  regions,
+  categories,
+}: {
+  villas: Villa[];
+  regions: Region[];
+  categories: Category[];
+}) {
   const { t, lang, amenity } = useI18n();
   const params = useSearchParams();
+
+  // ?category=sea-view ile gelindiğinde o kategorinin villalarına daralt
+  const categorySlug = params.get("category");
+  const category = categories.find((c) => c.slug === categorySlug) ?? null;
 
   const [region, setRegion] = useState(params.get("region") ?? "");
   const [q, setQ] = useState(params.get("q") ?? "");
@@ -51,7 +64,10 @@ export default function VillaListClient() {
   };
 
   const results = useMemo(() => {
+    const inCategory = category ? new Set(category.villaSlugs) : null;
+
     const list = villas.filter((v) => {
+      if (inCategory && !inCategory.has(v.slug)) return false;
       if (region && v.region !== region) return false;
       if (q && !v.name.toLowerCase().includes(q.toLowerCase())) return false;
       if (minGuests && v.capacity < minGuests) return false;
@@ -73,7 +89,7 @@ export default function VillaListClient() {
           return Number(b.featured) - Number(a.featured) || b.rating - a.rating;
       }
     });
-  }, [region, q, minGuests, minBeds, maxPrice, amenities, sort]);
+  }, [villas, category, region, q, minGuests, minBeds, maxPrice, amenities, sort]);
 
   const Filters = (
     <div className="space-y-6">

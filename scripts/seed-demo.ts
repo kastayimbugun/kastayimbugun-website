@@ -10,8 +10,9 @@
  * Yalnızca yerelde, kurulum sırasında çalıştırılır.
  */
 import { createClient } from "@supabase/supabase-js";
-import { villas, regions, villaCode } from "../src/lib/villas.ts";
-import { villaCategories } from "../src/lib/categories.ts";
+import { villas, regions } from "./demo-data/villas.ts";
+import { villaCategories } from "./demo-data/categories.ts";
+import { villaCode } from "../src/lib/villaUtils.ts";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

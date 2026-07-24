@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Mail, Phone } from "lucide-react";
 import Logo from "./Logo";
 import { useI18n } from "@/lib/i18n";
-import { regions } from "@/lib/villas";
+import type { Region } from "@/lib/data/villas";
 
 const socials = [
   {
@@ -21,7 +21,7 @@ const socials = [
   },
 ];
 
-export default function Footer() {
+export default function Footer({ regions }: { regions: Region[] }) {
   const { t } = useI18n();
 
   return (

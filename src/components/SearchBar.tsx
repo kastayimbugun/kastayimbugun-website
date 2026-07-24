@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { toISO } from "@/lib/format";
-import { regions } from "@/lib/villas";
+import type { Region } from "@/lib/data/villas";
 import GuestSelector, { type GuestCounts } from "./GuestSelector";
 
 function Segment({
@@ -43,7 +43,7 @@ function Segment({
   );
 }
 
-export default function SearchBar() {
+export default function SearchBar({ regions }: { regions: Region[] }) {
   const { t } = useI18n();
   const router = useRouter();
   const [mode, setMode] = useState<"region" | "name">("region");
