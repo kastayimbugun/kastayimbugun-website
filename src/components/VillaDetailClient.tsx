@@ -22,11 +22,17 @@ import { useI18n } from "@/lib/i18n";
 import { formatPrice, formatDate } from "@/lib/format";
 import { rangeHasConflict } from "@/lib/availability";
 import { amenityIcons } from "@/lib/amenityIcons";
-import { villas } from "@/lib/villas";
 import { villaDistances } from "@/lib/distances";
 import type { Villa } from "@/lib/types";
 
-export default function VillaDetailClient({ villa }: { villa: Villa }) {
+export default function VillaDetailClient({
+  villa,
+  otherVillas = [],
+}: {
+  villa: Villa;
+  /** Benzer villalar bölümü için — sunucudan gelir */
+  otherVillas?: Villa[];
+}) {
   const { t, lang, amenity } = useI18n();
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
@@ -61,9 +67,12 @@ export default function VillaDetailClient({ villa }: { villa: Villa }) {
     calendarRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
 
   const description = lang === "tr" ? villa.descriptionTr : villa.descriptionEn;
-  const similar = villas
+  // Önce aynı bölgedekiler, sonra diğerleri
+  const similar = otherVillas
     .filter((v) => v.slug !== villa.slug && v.region === villa.region)
-    .concat(villas.filter((v) => v.slug !== villa.slug && v.region !== villa.region))
+    .concat(
+      otherVillas.filter((v) => v.slug !== villa.slug && v.region !== villa.region)
+    )
     .slice(0, 3);
 
   const facts = [

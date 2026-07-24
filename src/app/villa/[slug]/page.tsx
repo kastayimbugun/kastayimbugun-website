@@ -1,10 +1,15 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import VillaDetailClient from "@/components/VillaDetailClient";
-import { getVilla, villas } from "@/lib/villas";
+import { getVilla, getVillas, getVillaSlugs } from "@/lib/data/villas";
 
-export function generateStaticParams() {
-  return villas.map((v) => ({ slug: v.slug }));
+// Villa verisi değişince sayfa en geç 5 dakikada tazelenir
+// (yönetim panelinde anlık tazeleme Faz 5'te eklenecek)
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  const slugs = await getVillaSlugs();
+  return slugs.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({
@@ -13,7 +18,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const villa = getVilla(slug);
+  const villa = await getVilla(slug);
   if (!villa) return { title: "Villa bulunamadı — Kastayım Bugün Villaları" };
   return {
     title: `${villa.name}, ${villa.region} — Kastayım Bugün Villaları`,
@@ -27,7 +32,7 @@ export default async function VillaPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const villa = getVilla(slug);
+  const [villa, all] = await Promise.all([getVilla(slug), getVillas()]);
   if (!villa) notFound();
-  return <VillaDetailClient villa={villa} />;
+  return <VillaDetailClient villa={villa} otherVillas={all} />;
 }

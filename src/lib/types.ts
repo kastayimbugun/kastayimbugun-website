@@ -28,6 +28,8 @@ export type AmenityKey =
 export interface Villa {
   slug: string;
   name: string;
+  /** Kartlarda gösterilen tesis kodu (KBV1234). Yoksa slug'dan üretilir. */
+  code?: string;
   region: string; // e.g. "Kalkan"
   province: string; // e.g. "Antalya"
   images: string[];
@@ -52,6 +54,10 @@ export interface Villa {
   checkOut: string; // "10:00"
   minNights: number;
   pricePerNight: number; // base nightly price in TRY
+  /** Temizlik bedeli (villa bazında; eskiden kodda sabitti) */
+  cleaningFee?: number;
+  /** Hizmet bedeli oranı, ör. 0.05 */
+  serviceRate?: number;
   /** Reserved date ranges (ISO yyyy-mm-dd, inclusive start, exclusive end) */
   bookedRanges: { start: string; end: string }[];
   /** Seasonal pricing rows shown in the price table */

@@ -15,13 +15,13 @@ import {
 import type { Villa } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
-import { villaCode, priceRange } from "@/lib/villas";
+import { villaCode, priceRange } from "@/lib/villaUtils";
 
 export default function VillaCard({ villa }: { villa: Villa }) {
   const { t, lang } = useI18n();
   const [fav, setFav] = useState(false);
 
-  const code = villaCode(villa.slug);
+  const code = villa.code ?? villaCode(villa.slug);
   const { min, max } = priceRange(villa);
   const hasDiscount = !!villa.discountPercent;
   const factor = hasDiscount ? 1 - villa.discountPercent! / 100 : 1;

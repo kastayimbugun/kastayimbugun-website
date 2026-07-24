@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3007,
       "autoPort": false
+    },
+    {
+      "name": "villakesif-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start", "-p", "3011"],
+      "port": 3011,
+      "autoPort": false
     }
   ]
 }
