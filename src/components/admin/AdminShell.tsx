@@ -17,7 +17,7 @@ import type { StaffUser } from "@/lib/auth/staff";
 
 const nav = [
   { href: "/yonetim", label: "Panel", icon: LayoutDashboard, ready: true },
-  { href: "/yonetim/talepler", label: "Talepler", icon: CalendarCheck, ready: false },
+  { href: "/yonetim/talepler", label: "Talepler", icon: CalendarCheck, ready: true },
   { href: "/yonetim/villalar", label: "Villalar", icon: Home, ready: false },
   { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin, ready: false },
   { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags, ready: false },
