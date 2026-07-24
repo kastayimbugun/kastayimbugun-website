@@ -59,9 +59,12 @@ Minimum yayınlanabilir sürüm (MVP) = Faz 0–4 + 6–7. Faz 5 yoksa villalar�
 
 ## FAZ 0 — Altyapı hazırlığı ve deploy hattı
 
-**Durum: kod tarafı tamam (24.07.2026).** Repo: `muratkaval/kastayimbugunvillalari` (private).
-`main` + `dev` dalları push'landı, lint temiz, `next build` hatasız, `.env.example` ve `engines.node` eklendi.
-**Kalan tek madde: Vercel'de projeyi bu repoya bağlamak** (aşağıdaki 3. adım — panelden yapılacak).
+**Durum: TAMAM + canlıda (24.07.2026).** Repo: `muratkaval/kastayimbugunvillalari` (private).
+`main` + `dev` push'landı, lint temiz, build hatasız. Vercel bağlı, ortam değişkenleri eklendi,
+prod deploy başarılı ve uçtan uca doğrulandı (Supabase okuma + rezervasyon yazma canlıda çalışıyor).
+- **Kanonik Vercel projesi: `kastayimbugunvillalari-n6a6`** (env'ler burada, deploy başarılı).
+- Kopya proje `kastayimbugunvillalari` (boş, 404) silinecek — tek proje kalsın.
+- Canlı URL geçici: `kastayimbugunvillalari-n6a6.vercel.app`. Gerçek domain Faz 7'de bağlanacak.
 
 **Amaç:** Kod değişmeden önce boru hattını kur; her commit'in otomatik preview linki olsun.
 
