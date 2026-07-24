@@ -20,7 +20,20 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------
+-- Tablolar
+-- ---------------------------------------------------------------
+
+-- Yönetici rolleri (auth.users'a bağlı)
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  role text not null default 'viewer' check (role in ('admin', 'editor', 'viewer')),
+  full_name text,
+  created_at timestamptz not null default now()
+);
+
 -- Oturum açan kişi yönetici/editör mü?
+-- (profiles tablosundan SONRA tanımlanmalı: SQL fonksiyon gövdesi oluşturulurken doğrulanır)
 create or replace function is_staff()
 returns boolean
 language sql
@@ -33,18 +46,6 @@ as $$
     where id = auth.uid() and role in ('admin', 'editor')
   );
 $$;
-
--- ---------------------------------------------------------------
--- Tablolar
--- ---------------------------------------------------------------
-
--- Yönetici rolleri (auth.users'a bağlı)
-create table profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  role text not null default 'viewer' check (role in ('admin', 'editor', 'viewer')),
-  full_name text,
-  created_at timestamptz not null default now()
-);
 
 -- Bölgeler
 create table regions (

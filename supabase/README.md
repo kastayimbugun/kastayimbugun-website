@@ -11,6 +11,26 @@ her değişiklik yeni bir migration dosyası olarak buraya eklenir.
 
 Sırayla çalıştır: `0001_init.sql`, sonra varsa `0002_*.sql` ...
 
+> **Tarayıcı çevirisini kapat.** Edge/Chrome "bu sayfayı çevir" derse reddet.
+> Çeviri, SQL editöründeki metni de çevirip (`villa-images` → `villa-imgeleri` gibi)
+> ne yaptığını takip etmeni imkânsız hale getirir.
+
+### Hata alırsan
+
+SQL Editor betiği tek işlem (transaction) olarak çalıştırır: bir satır patlarsa
+**hiçbir şey oluşturulmaz**, baştan çalıştırman yeterlidir.
+Yine de "already exists" hatası alırsan, önce şunu çalıştırıp temiz sayfa aç:
+
+```sql
+drop schema public cascade;
+create schema public;
+grant usage on schema public to anon, authenticated, service_role;
+grant all on schema public to postgres;
+```
+
+> Bu komut `public` şemasındaki **her şeyi siler**. Yalnızca kurulum aşamasında,
+> içeride gerçek veri yokken kullan.
+
 ## İlk kurulum sonrası yapılacaklar
 
 **1. Kendine yönetici hesabı aç**
