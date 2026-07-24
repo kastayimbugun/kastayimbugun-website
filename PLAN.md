@@ -59,6 +59,10 @@ Minimum yayınlanabilir sürüm (MVP) = Faz 0–4 + 6–7. Faz 5 yoksa villalar�
 
 ## FAZ 0 — Altyapı hazırlığı ve deploy hattı
 
+**Durum: kod tarafı tamam (24.07.2026).** Repo: `muratkaval/kastayimbugunvillalari` (private).
+`main` + `dev` dalları push'landı, lint temiz, `next build` hatasız, `.env.example` ve `engines.node` eklendi.
+**Kalan tek madde: Vercel'de projeyi bu repoya bağlamak** (aşağıdaki 3. adım — panelden yapılacak).
+
 **Amaç:** Kod değişmeden önce boru hattını kur; her commit'in otomatik preview linki olsun.
 
 **İşler**
