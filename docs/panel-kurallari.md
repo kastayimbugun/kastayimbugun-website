@@ -2,7 +2,8 @@
 
 Bu doküman `/yonetim` panelinin **değişmez kurallarını** tanımlar. Üç garanti verir:
 **(1) dışarıdan kimse giremez, (2) veri sızmaz, (3) veri bozulmaz/kaybolmaz** — üstüne
-modern ve kolay yönetilebilir bir arayüz. Panelle ilgili her PR bu dokümana uymak zorundadır.
+**kurumsal mimari** (modüler, bakımı kolay, ölçeklenebilir) ve modern, kolay yönetilebilir
+bir arayüz. Panelle ilgili her PR bu dokümana uymak zorundadır.
 
 > Genel mimari kurallar için [ARCHITECTURE.md](../ARCHITECTURE.md). Bu doküman onun panele
 > özel, sıkılaştırılmış uzantısıdır.
@@ -111,7 +112,61 @@ Panelde müşteri **PII'si** (telefon, e-posta, ad) var. Sızıntı yüzeyini s�
 
 ---
 
-## 5. Panel PR kontrol listesi
+## 5. Kurumsal mimari — modüler, bakımı kolay, ölçeklenebilir
+
+Panel, "bir özellik eklerken başkasını bozmayan" ve yeni gelen yazılımcının hızlı
+kavrayacağı biçimde kurulur. Her modül aynı katman desenini izler; ortak parçalar tek
+yerde durur.
+
+### Katmanlar (her panel modülü aynı deseni izler)
+```
+Sayfa (app/yonetim/**)        → routing + ince sunucu bileşeni; yetki + veri çeker
+  ├─ Okuma:  lib/data/admin/**   → oturumlu istemci (RLS), sadece gereken sütunlar
+  ├─ Yazma:  lib/actions/admin/** → Server Action; guard + Zod + revalidate
+  ├─ Şema:   lib/schemas/**       → Zod (istemci + sunucu tek kaynak)
+  └─ Sunum:  components/admin/**  → veriyi prop alır, kendi veri çekmez
+```
+
+### Klasör yapısı (öngörülebilir — herkes nerede ne olduğunu bilir)
+```
+app/yonetim/
+  layout.tsx            # yetki kontrolü + admin kabuk (menü, üst bar)
+  giris/page.tsx        # giriş
+  talepler/page.tsx     # her özellik kendi klasöründe, izole
+  villalar/page.tsx  villalar/[id]/page.tsx
+  bolgeler/  kategoriler/  ...
+lib/
+  auth/                 # getStaffUser(), oturum yardımcıları
+  supabase/
+    server.ts           # anon (herkese açık okuma)
+    session.ts          # çerezli oturum istemcisi (PANEL bunu kullanır)
+    admin.ts            # service_role (yalnızca herkese açık form; panel KULLANMAZ)
+  data/admin/           # bookings.ts, villas.ts ... (okuma)
+  actions/admin/        # bookings.ts, villas.ts ... (yazma, "use server")
+  schemas/              # booking.ts, villa.ts ... (Zod)
+components/admin/        # AdminTable, FormField, StatusBadge, ConfirmDialog, Toast, AdminNav
+```
+
+### İlkeler
+- **Özellik izolasyonu:** Talepler, Villalar, Kategoriler ayrı modüllerdir. Birini
+  değiştirmek diğerinin dosyalarına dokunmayı gerektirmez. Modüller birbiriyle **yalnızca
+  tiplenmiş fonksiyon/prop arayüzü** üzerinden konuşur (ARCHITECTURE.md §9).
+- **DRY / tasarım sistemi:** tablo, form alanı, durum rozeti, onay diyaloğu, toast **bir kez**
+  `components/admin/` altında yazılır ve her yerde yeniden kullanılır. Kopyala-yapıştır yok.
+- **Uçtan uca tip güvenliği:** DB tipleri → veri katmanı → action → bileşen aynı tiplerle
+  akar. (İleride `supabase gen types` ile DB'den tip üretimi — tek doğruluk kaynağı.)
+- **Saf mantık ayrı:** iş kuralları (fiyat, doğrulama, uygunluk) IO'dan ayrı saf
+  fonksiyonlardadır → birim test edilebilir, panelden bağımsız (bkz. `pricing.ts`, `schemas/`).
+- **Tutarlı hata sözleşmesi:** action'lar tek tip sonuç döndürür
+  (`{ ok: true, ... } | { ok: false, error }`); istemci bunu tek biçimde işler.
+- **Ölçeklenebilirlik:** listeler **sunucu tarafı** filtre + sayfalama kullanır (villa/talep
+  sayısı büyüyünce yavaşlamasın); sık sorgulanan sütunlarda DB index'i.
+- **Sihirli sabit yok:** ücret/oran gibi değerler koda gömülmez, veriden gelir
+  (ör. temizlik bedeli villa kaydında — Faz 4'te taşındı).
+- **Migration disiplini:** şema değişikliği yalnızca `supabase/migrations/` dosyasıyla,
+  Studio'dan elle değil (ARCHITECTURE.md §8).
+
+## 6. Panel PR kontrol listesi
 
 Panelle ilgili her değişiklik yayına gitmeden önce:
 
@@ -124,3 +179,6 @@ Panelle ilgili her değişiklik yayına gitmeden önce:
 - [ ] Yıkıcı işlemde onay + soft delete uygulandı mı?
 - [ ] Yazma sonrası `revalidatePath` ile ilgili sayfa tazelendi mi?
 - [ ] `/yonetim` yolu `noindex` mi?
+- [ ] Modül izole mi (başka modülün dosyasına dokunmadan eklendi mi)?
+- [ ] Ortak UI parçası tekrar yazılmadı, `components/admin/`'den mi kullanıldı?
+- [ ] Liste sunucu tarafı filtre + sayfalama kullanıyor mu (ölçek)?
