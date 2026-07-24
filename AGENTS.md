@@ -10,4 +10,8 @@ Kod yazmadan önce **[ARCHITECTURE.md](ARCHITECTURE.md)** dosyasını oku — ka
 sunucu/istemci sınırı, doğrulama ve güvenlik kuralları oradadır. Bir özellik eklerken bu
 kuralları koru; ihlal gerekiyorsa önce ARCHITECTURE.md'yi güncelle.
 
+Yönetim paneli (`/yonetim`) üzerinde çalışıyorsan ayrıca
+**[docs/panel-kurallari.md](docs/panel-kurallari.md)** — erişim güvenliği, veri gizliliği
+ve bütünlük kuralları (dört katmanlı yetki, RLS, soft delete, PR kontrol listesi).
+
 Yol haritası ve fazlar: **[PLAN.md](PLAN.md)**.
