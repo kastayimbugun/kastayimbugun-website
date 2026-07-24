@@ -306,6 +306,12 @@ anahtar gelince aktifleşir.
 
 ## FAZ 5 — Yönetim paneli ve kimlik doğrulama
 
+**Kapsam kararları (25.07.2026):** görsel yönetimi tam Storage yüklemesiyle; kullanıcı/rol
+şimdilik Supabase panelinden (panelde ekran yok); panel dili **sadece Türkçe** (iç araç).
+Güvenlik/mimari kuralları: [docs/panel-kurallari.md](docs/panel-kurallari.md).
+Yapım sırası: 5.0 kimlik altyapısı → 5.1 talepler → 5.2 villa → 5.3 sezon+takvim →
+5.4 görsel → 5.5 bölge+kategori → 5.6 dashboard.
+
 **Amaç:** Acente kendi villasını, fiyatını, takvimini kendi girsin; sana bağımlı kalmasın.
 
 **İşler**
