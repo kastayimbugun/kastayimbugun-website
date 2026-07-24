@@ -278,6 +278,12 @@ create table contact_messages (
 
 ## FAZ 4 — Rezervasyon talebi akışı + gerçek müsaitlik
 
+**Durum: çekirdek tamam (24.07.2026).** Form → Server Action → sunucu doğrulaması →
+sunucuda fiyat hesabı → `booking_requests` kaydı → teşekkür sayfası. Uçtan uca test edildi
+(talep DB'ye düştü, tutar sunucuda 54.000 hesaplandı). Kalan: e-posta bildirimi (Resend
+anahtarı), WhatsApp butonu (numara), gerçek hız sınırı (Upstash). Turnstile kancası hazır,
+anahtar gelince aktifleşir.
+
 **Amaç:** "Rezervasyon Talebi Oluştur" gerçekten bir yere düşsün; takvim gerçek doluluğu göstersin.
 
 **İşler**

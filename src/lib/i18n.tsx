@@ -164,6 +164,36 @@ const tr: Dict = {
   "book.noCharge": "Şu anda ücret alınmaz",
   "book.unavailable": "Seçilen tarihler dolu",
   "book.request": "Talebiniz alındı! (demo)",
+  "book.priceNote": "Kesin fiyat acente tarafından teyit edilir.",
+
+  // Rezervasyon talebi formu
+  "form.title": "Rezervasyon Talebi",
+  "form.summary": "Talep özeti",
+  "form.fullName": "Ad Soyad",
+  "form.fullNamePh": "Adınız ve soyadınız",
+  "form.phone": "Telefon",
+  "form.phonePh": "05XX XXX XX XX",
+  "form.email": "E-posta (opsiyonel)",
+  "form.emailPh": "ornek@eposta.com",
+  "form.note": "Not (opsiyonel)",
+  "form.notePh": "Eklemek istedikleriniz",
+  "form.submit": "Talebi Gönder",
+  "form.submitting": "Gönderiliyor…",
+  "form.cancel": "Vazgeç",
+  "form.selectDatesFirst": "Önce giriş ve çıkış tarihi seçin.",
+  "form.errorGeneric": "Talep gönderilemedi. Lütfen tekrar deneyin.",
+  "form.errorDates": "Seçilen tarihler uygun değil.",
+  "form.errorValidation": "Lütfen bilgileri kontrol edin.",
+  "form.guestsLabel": "Misafir",
+
+  // Teşekkür sayfası
+  "thanks.title": "Talebiniz alındı!",
+  "thanks.desc":
+    "Rezervasyon talebiniz bize ulaştı. Ekibimiz en kısa sürede sizinle iletişime geçecek.",
+  "thanks.contactNote":
+    "Genellikle birkaç saat içinde, en geç 24 saatte dönüş yapıyoruz.",
+  "thanks.backHome": "Ana Sayfaya Dön",
+  "thanks.browseVillas": "Villaları Keşfet",
 
   "footer.tagline": "Türkiye'nin dört bir yanında seçkin kiralık villalar.",
   "footer.discover": "Keşfet",
@@ -351,6 +381,36 @@ const en: Dict = {
   "book.noCharge": "You won't be charged yet",
   "book.unavailable": "Selected dates are unavailable",
   "book.request": "Request received! (demo)",
+  "book.priceNote": "The final price is confirmed by the agency.",
+
+  // Reservation request form
+  "form.title": "Reservation Request",
+  "form.summary": "Request summary",
+  "form.fullName": "Full Name",
+  "form.fullNamePh": "Your full name",
+  "form.phone": "Phone",
+  "form.phonePh": "+90 5XX XXX XX XX",
+  "form.email": "Email (optional)",
+  "form.emailPh": "you@example.com",
+  "form.note": "Note (optional)",
+  "form.notePh": "Anything you'd like to add",
+  "form.submit": "Send Request",
+  "form.submitting": "Sending…",
+  "form.cancel": "Cancel",
+  "form.selectDatesFirst": "Please select check-in and check-out dates first.",
+  "form.errorGeneric": "Could not send the request. Please try again.",
+  "form.errorDates": "The selected dates are not available.",
+  "form.errorValidation": "Please check your details.",
+  "form.guestsLabel": "Guests",
+
+  // Thank-you page
+  "thanks.title": "Request received!",
+  "thanks.desc":
+    "Your reservation request has reached us. Our team will contact you shortly.",
+  "thanks.contactNote":
+    "We usually respond within a few hours, and within 24 hours at the latest.",
+  "thanks.backHome": "Back to Home",
+  "thanks.browseVillas": "Browse Villas",
 
   "footer.tagline": "Curated villa rentals across Türkiye.",
   "footer.discover": "Discover",
