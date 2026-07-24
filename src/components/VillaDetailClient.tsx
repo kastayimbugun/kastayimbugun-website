@@ -1,0 +1,360 @@
+"use client";
+
+import { useRef, useState } from "react";
+import {
+  Star,
+  MapPin,
+  Users,
+  BedDouble,
+  Bath,
+  Ruler,
+  Waves,
+  Clock,
+  Moon,
+  ChevronDown,
+} from "lucide-react";
+import Gallery from "./Gallery";
+import AvailabilityCalendar from "./AvailabilityCalendar";
+import BookingBox from "./BookingBox";
+import { type GuestCounts } from "./GuestSelector";
+import VillaCard from "./VillaCard";
+import { useI18n } from "@/lib/i18n";
+import { formatPrice, formatDate } from "@/lib/format";
+import { rangeHasConflict } from "@/lib/availability";
+import { amenityIcons } from "@/lib/amenityIcons";
+import { villas } from "@/lib/villas";
+import { villaDistances } from "@/lib/distances";
+import type { Villa } from "@/lib/types";
+
+export default function VillaDetailClient({ villa }: { villa: Villa }) {
+  const { t, lang, amenity } = useI18n();
+  const [checkIn, setCheckIn] = useState<string | null>(null);
+  const [checkOut, setCheckOut] = useState<string | null>(null);
+  const [guests, setGuests] = useState<GuestCounts>({
+    adults: Math.min(2, villa.capacity),
+    children: 0,
+    babies: 0,
+  });
+  const [showAllDist, setShowAllDist] = useState(false);
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  const onDayClick = (iso: string) => {
+    if (!checkIn || (checkIn && checkOut)) {
+      setCheckIn(iso);
+      setCheckOut(null);
+      return;
+    }
+    if (iso <= checkIn) {
+      setCheckIn(iso);
+      setCheckOut(null);
+      return;
+    }
+    if (rangeHasConflict(checkIn, iso, villa.bookedRanges)) {
+      setCheckIn(iso);
+      setCheckOut(null);
+      return;
+    }
+    setCheckOut(iso);
+  };
+
+  const scrollToCalendar = () =>
+    calendarRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  const description = lang === "tr" ? villa.descriptionTr : villa.descriptionEn;
+  const similar = villas
+    .filter((v) => v.slug !== villa.slug && v.region === villa.region)
+    .concat(villas.filter((v) => v.slug !== villa.slug && v.region !== villa.region))
+    .slice(0, 3);
+
+  const facts = [
+    {
+      icon: Users,
+      label: t("card.guests"),
+      value: `${villa.capacity} ${t("card.person")}`,
+    },
+    {
+      icon: BedDouble,
+      label: t("card.bedroom"),
+      value: `${villa.bedrooms} ${t("card.bedrooms")}`,
+    },
+    {
+      icon: Bath,
+      label: t("card.bath"),
+      value: `${villa.bathrooms} ${t("card.bath")}`,
+    },
+    { icon: Ruler, label: t("detail.area"), value: `${villa.size} m²` },
+    {
+      icon: Waves,
+      label: t("card.toSea"),
+      value: `${villa.distanceToSea} m`,
+    },
+  ];
+
+  const dists = villaDistances(villa, lang);
+  const visibleDists = showAllDist ? dists : dists.slice(0, 6);
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <Gallery images={villa.images} name={villa.name} />
+
+      {/* Title */}
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+        <h1 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">
+          {villa.name}
+        </h1>
+        <div className="flex flex-col gap-1 text-sm text-brand-900/70 sm:items-end">
+          <span className="inline-flex items-center gap-1 font-semibold text-brand-900">
+            <Star className="h-4 w-4 fill-sun-400 text-sun-400" />
+            {villa.rating.toFixed(1)}
+            <span className="font-normal text-brand-900/50">
+              · {villa.reviewCount} {t("detail.reviews")}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-4 w-4 text-brand-500" />
+            {villa.region}, {villa.province}
+          </span>
+        </div>
+      </div>
+
+      {/* Facts — tam genişlik */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+        {facts.map((f) => (
+          <div
+            key={f.label}
+            className="rounded-xl border border-sand-200 bg-sand-50 p-4 text-center"
+          >
+            <f.icon className="mx-auto h-6 w-6 text-brand-500" />
+            <div className="mt-2 text-xs font-medium text-brand-900/55">
+              {f.label}
+            </div>
+            <div className="mt-0.5 text-sm font-extrabold text-brand-950">
+              {f.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 flex flex-col gap-10 lg:flex-row">
+        {/* LEFT */}
+        <div className="min-w-0 flex-1 space-y-10">
+
+          {/* Overview */}
+          <section>
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.overview")}
+            </h2>
+            <p className="mt-3 leading-relaxed text-brand-900/75">{description}</p>
+            <div className="mt-4 flex flex-wrap gap-4 text-sm">
+              <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-800">
+                <Clock className="h-4 w-4" />
+                {t("detail.checkInOut")}: {villa.checkIn} / {villa.checkOut}
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-800">
+                <Moon className="h-4 w-4" />
+                {t("detail.minNights")}: {villa.minNights} {t("detail.nights")}
+              </span>
+            </div>
+          </section>
+
+          {/* Amenities */}
+          <section>
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.amenities")}
+            </h2>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {villa.amenities.map((a) => {
+                const Icon = amenityIcons[a];
+                return (
+                  <div
+                    key={a}
+                    className="flex items-center gap-3 rounded-xl border border-sand-200 px-3 py-2.5"
+                  >
+                    <Icon className="h-5 w-5 shrink-0 text-brand-600" />
+                    <span className="text-sm font-medium text-brand-900">
+                      {amenity(a)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Availability */}
+          <section ref={calendarRef} className="scroll-mt-32">
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.availability")}
+            </h2>
+            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-5">
+              <AvailabilityCalendar
+                bookedRanges={villa.bookedRanges}
+                checkIn={checkIn}
+                checkOut={checkOut}
+                onDayClick={onDayClick}
+                seasons={villa.seasons}
+                discountPercent={villa.discountPercent}
+              />
+            </div>
+          </section>
+
+          {/* Uzaklıklar */}
+          <section>
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.distances")}
+            </h2>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleDists.map((d, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-xl bg-sun-500 px-4 py-3 text-white"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                    <d.icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold leading-tight">
+                      {d.label}
+                      {d.detail && (
+                        <span className="ml-1 text-xs font-normal text-white/80">
+                          ({d.detail})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-semibold text-white/95">
+                      {d.value}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {dists.length > 6 && (
+              <button
+                onClick={() => setShowAllDist((v) => !v)}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-sun-500 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-sun-600"
+              >
+                {showAllDist ? t("cat.showLess") : t("cat.showMore")}
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    showAllDist ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+            )}
+          </section>
+
+          {/* Video */}
+          {villa.videoUrl && (
+            <section>
+              <h2 className="text-xl font-bold text-brand-950">
+                {t("detail.video")}
+              </h2>
+              <div className="mt-4 aspect-video overflow-hidden rounded-2xl bg-brand-950">
+                <iframe
+                  src={villa.videoUrl}
+                  title={`${villa.name} video`}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Price table */}
+          <section>
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.priceTable")}
+            </h2>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-sand-200">
+              <table className="w-full text-sm">
+                <thead className="bg-brand-800 text-white">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">
+                      {t("detail.season")}
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold">
+                      {t("detail.dates")}
+                    </th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      {t("detail.nightly")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {villa.seasons.map((s, i) => (
+                    <tr
+                      key={i}
+                      className={i % 2 ? "bg-sand-50" : "bg-white"}
+                    >
+                      <td className="px-4 py-3 font-semibold text-brand-900">
+                        {lang === "tr" ? s.labelTr : s.labelEn}
+                      </td>
+                      <td className="px-4 py-3 text-brand-900/70">
+                        {formatDate(s.start, lang)} — {formatDate(s.end, lang)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-brand-800">
+                        {formatPrice(s.price, lang)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Location */}
+          <section>
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.location")}
+            </h2>
+            <div className="relative mt-4 flex h-56 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-brand-100 to-brand-50 ring-1 ring-sand-200">
+              <div
+                className="absolute inset-0 opacity-40"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(#f0d5a6 1px, transparent 1px), linear-gradient(90deg, #f0d5a6 1px, transparent 1px)",
+                  backgroundSize: "32px 32px",
+                }}
+              />
+              <div className="relative text-center">
+                <MapPin className="mx-auto h-10 w-10 text-sun-500" />
+                <div className="mt-2 font-bold text-brand-900">
+                  {villa.region}, {villa.province}
+                </div>
+                <div className="text-sm text-brand-900/60">
+                  {t("card.toSea")}: {villa.distanceToSea} m
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* RIGHT — sticky booking */}
+        <div className="w-full lg:w-[360px] lg:shrink-0">
+          <div className="lg:sticky lg:top-32">
+            <BookingBox
+              villa={villa}
+              checkIn={checkIn}
+              checkOut={checkOut}
+              guests={guests}
+              setGuests={setGuests}
+              onScrollToCalendar={scrollToCalendar}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Similar */}
+      <section className="mt-16">
+        <h2 className="text-2xl font-extrabold text-brand-950">
+          {t("detail.similar")}
+        </h2>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {similar.map((v) => (
+            <VillaCard key={v.slug} villa={v} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
