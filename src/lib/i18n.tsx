@@ -1,6 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+} from "react";
 import type { AmenityKey } from "./types";
 
 export type Lang = "tr" | "en";
@@ -392,18 +397,46 @@ interface I18nCtx {
 
 const Ctx = createContext<I18nCtx | null>(null);
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("tr");
+/**
+ * Dil tercihi localStorage'da tutulur; React'e harici bir kaynak olarak bağlanır.
+ * (Faz 6'da URL tabanlı /tr - /en yapısına geçilecek, bu katman o zaman kalkar.)
+ */
+const LANG_KEY = "lang";
+const listeners = new Set<() => void>();
 
+function subscribeLang(cb: () => void) {
+  listeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function getLangSnapshot(): Lang {
+  return localStorage.getItem(LANG_KEY) === "en" ? "en" : "tr";
+}
+
+// Sunucuda ve hydration sırasında varsayılan dil
+function getLangServerSnapshot(): Lang {
+  return "tr";
+}
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const lang = useSyncExternalStore(
+    subscribeLang,
+    getLangSnapshot,
+    getLangServerSnapshot
+  );
+
+  // <html lang> özniteliğini seçili dille eşitle
   useEffect(() => {
-    const saved = localStorage.getItem("lang") as Lang | null;
-    if (saved === "tr" || saved === "en") setLangState(saved);
-  }, []);
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   const setLang = (l: Lang) => {
-    setLangState(l);
-    localStorage.setItem("lang", l);
-    document.documentElement.lang = l;
+    localStorage.setItem(LANG_KEY, l);
+    listeners.forEach((cb) => cb());
   };
 
   const t = (key: string) => dicts[lang][key] ?? key;

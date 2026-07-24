@@ -27,12 +27,13 @@ export default function Gallery({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
-      if (e.key === "ArrowLeft") prev();
-      if (e.key === "ArrowRight") next();
+      if (e.key === "ArrowLeft")
+        setIdx((i) => (i - 1 + images.length) % images.length);
+      if (e.key === "ArrowRight") setIdx((i) => (i + 1) % images.length);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, images.length]);
 
   return (
     <>

@@ -10,6 +10,34 @@ import type { Villa } from "@/lib/types";
 const CLEANING_FEE = 1500;
 const SERVICE_RATE = 0.05;
 
+function DateBtn({
+  label,
+  value,
+  placeholder,
+  lang,
+  onClick,
+}: {
+  label: string;
+  value: string | null;
+  placeholder: string;
+  lang: "tr" | "en";
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 rounded-xl border border-sand-200 px-3 py-2.5 text-left transition hover:border-brand-400"
+    >
+      <div className="text-[11px] font-semibold uppercase text-brand-900/50">
+        {label}
+      </div>
+      <div className="text-sm font-semibold text-brand-950">
+        {value ? formatDateShort(value, lang) : placeholder}
+      </div>
+    </button>
+  );
+}
+
 interface Props {
   villa: Villa;
   checkIn: string | null;
@@ -41,26 +69,6 @@ export default function BookingBox({
   const total = subtotal + (nights > 0 ? CLEANING_FEE + service : 0);
   const valid = nights >= villa.minNights && !conflict;
 
-  const DateBtn = ({
-    label,
-    value,
-  }: {
-    label: string;
-    value: string | null;
-  }) => (
-    <button
-      onClick={onScrollToCalendar}
-      className="flex-1 rounded-xl border border-sand-200 px-3 py-2.5 text-left transition hover:border-brand-400"
-    >
-      <div className="text-[11px] font-semibold uppercase text-brand-900/50">
-        {label}
-      </div>
-      <div className="text-sm font-semibold text-brand-950">
-        {value ? formatDateShort(value, lang) : t("book.selectDates")}
-      </div>
-    </button>
-  );
-
   return (
     <div className="rounded-2xl border border-sand-200 bg-white p-5">
       <div className="flex items-baseline justify-between">
@@ -82,8 +90,20 @@ export default function BookingBox({
       </div>
 
       <div className="mt-4 flex gap-2">
-        <DateBtn label={t("book.checkIn")} value={checkIn} />
-        <DateBtn label={t("book.checkOut")} value={checkOut} />
+        <DateBtn
+          label={t("book.checkIn")}
+          value={checkIn}
+          placeholder={t("book.selectDates")}
+          lang={lang}
+          onClick={onScrollToCalendar}
+        />
+        <DateBtn
+          label={t("book.checkOut")}
+          value={checkOut}
+          placeholder={t("book.selectDates")}
+          lang={lang}
+          onClick={onScrollToCalendar}
+        />
       </div>
 
       {/* Guests */}
