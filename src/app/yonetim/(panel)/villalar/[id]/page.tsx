@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { getAdminVilla, type VillaStatus } from "@/lib/data/admin/villas";
+import {
+  getAdminVilla,
+  getVillaForEdit,
+  type VillaStatus,
+} from "@/lib/data/admin/villas";
+import { getRegionOptions } from "@/lib/data/admin/regions";
+import Tabs from "@/components/admin/Tabs";
+import VillaForm from "@/components/admin/VillaForm";
+import ImageManager from "@/components/admin/ImageManager";
 import SeasonEditor from "@/components/admin/SeasonEditor";
 import BlockEditor from "@/components/admin/BlockEditor";
 
@@ -19,10 +27,14 @@ export default async function VillaDetayPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const villa = await getAdminVilla(id);
-  if (!villa) notFound();
+  const [full, detail, regions] = await Promise.all([
+    getVillaForEdit(id),
+    getAdminVilla(id),
+    getRegionOptions(),
+  ]);
+  if (!full || !detail) notFound();
 
-  const s = statusMeta[villa.status];
+  const s = statusMeta[full.status];
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -35,14 +47,12 @@ export default async function VillaDetayPage({
       </Link>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-extrabold text-brand-950">{villa.name}</h1>
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${s.cls}`}
-        >
+        <h1 className="text-xl font-extrabold text-brand-950">{full.name}</h1>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${s.cls}`}>
           {s.label}
         </span>
         <Link
-          href={`/villa/${villa.slug}`}
+          href={`/villa/${full.slug}`}
           target="_blank"
           className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
         >
@@ -50,26 +60,44 @@ export default async function VillaDetayPage({
         </Link>
       </div>
 
-      {/* Sezon fiyatları */}
-      <section className="mt-5 rounded-2xl border border-sand-200 bg-white p-5">
-        <h2 className="text-base font-bold text-brand-950">Sezon Fiyatları</h2>
-        <p className="mb-3 mt-0.5 text-sm text-brand-900/55">
-          Tarihe göre gecelik fiyat. Sezon dışı günlerde taban fiyat geçerlidir.
-        </p>
-        <SeasonEditor villaId={villa.id} seasons={villa.seasons} />
-      </section>
-
-      {/* Takvim / kapalı tarihler */}
-      <section className="mt-5 rounded-2xl border border-sand-200 bg-white p-5">
-        <h2 className="text-base font-bold text-brand-950">
-          Takvim — Kapalı Tarihler
-        </h2>
-        <p className="mb-3 mt-0.5 text-sm text-brand-900/55">
-          Bakım, kişisel kullanım vb. için tarih kapatın. Onaylı rezervasyonların
-          blokları burada görünür ama Talepler ekranından yönetilir.
-        </p>
-        <BlockEditor villaId={villa.id} blocks={villa.blocks} />
-      </section>
+      <div className="mt-5">
+        <Tabs
+          tabs={[
+            {
+              id: "info",
+              label: "Bilgiler",
+              content: <VillaForm villa={full} regions={regions} mode="edit" />,
+            },
+            {
+              id: "images",
+              label: `Görseller (${full.images.length})`,
+              content: (
+                <div className="rounded-2xl border border-sand-200 bg-white p-5">
+                  <ImageManager villaId={full.id} images={full.images} />
+                </div>
+              ),
+            },
+            {
+              id: "seasons",
+              label: "Sezon Fiyatları",
+              content: (
+                <div className="rounded-2xl border border-sand-200 bg-white p-5">
+                  <SeasonEditor villaId={full.id} seasons={detail.seasons} />
+                </div>
+              ),
+            },
+            {
+              id: "calendar",
+              label: "Takvim",
+              content: (
+                <div className="rounded-2xl border border-sand-200 bg-white p-5">
+                  <BlockEditor villaId={full.id} blocks={detail.blocks} />
+                </div>
+              ),
+            },
+          ]}
+        />
+      </div>
     </div>
   );
 }

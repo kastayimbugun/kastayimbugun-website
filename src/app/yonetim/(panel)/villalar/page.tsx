@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { getAdminVillas, type VillaStatus } from "@/lib/data/admin/villas";
 import { formatPrice } from "@/lib/format";
 
@@ -16,10 +16,21 @@ export default async function VillalarPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-extrabold text-brand-950">Villalar</h1>
-      <p className="mt-1 text-sm text-brand-900/55">
-        Sezon fiyatları ve takvim için bir villa seçin.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-extrabold text-brand-950">Villalar</h1>
+          <p className="mt-1 text-sm text-brand-900/55">
+            Düzenlemek için bir villa seçin veya yeni villa ekleyin.
+          </p>
+        </div>
+        <Link
+          href="/yonetim/villalar/yeni"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sun-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sun-600"
+        >
+          <Plus className="h-4 w-4" />
+          Yeni villa
+        </Link>
+      </div>
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-sand-200 bg-white">
         <ul className="divide-y divide-sand-100">
