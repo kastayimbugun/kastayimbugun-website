@@ -22,6 +22,11 @@ interface Props {
   months?: number;
   seasons?: Season[];
   discountPercent?: number;
+  /**
+   * Dolu günün üzerine gelince gösterilecek not (ör. "Kime kapatıldı").
+   * YALNIZCA panelde geçilir — herkese açık sitede geçilmez (gizlilik).
+   */
+  getBookedNote?: (iso: string) => string | null;
 }
 
 export default function AvailabilityCalendar({
@@ -32,6 +37,7 @@ export default function AvailabilityCalendar({
   months = 2,
   seasons = [],
   discountPercent,
+  getBookedNote,
 }: Props) {
   const { lang } = useI18n();
   const today = new Date();
@@ -87,6 +93,7 @@ export default function AvailabilityCalendar({
               checkIn && checkOut && iso > checkIn && iso < checkOut;
             const selected = isStart || isEnd;
 
+            const bookedNote = booked ? getBookedNote?.(iso) ?? null : null;
             const base = priceForDate(iso, seasons);
             const showPrice = base != null && !disabled;
             const hasDiscount = showPrice && !!discountPercent;
@@ -114,8 +121,14 @@ export default function AvailabilityCalendar({
                 key={i}
                 disabled={disabled}
                 onClick={() => onDayClick(iso)}
-                className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-sm transition ${cls}`}
+                title={bookedNote ?? undefined}
+                className={`relative flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-sm transition ${
+                  bookedNote ? "cursor-help" : ""
+                } ${cls}`}
               >
+                {bookedNote && (
+                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-rose-400" />
+                )}
                 <span className="leading-none">{day.getDate()}</span>
                 {showPrice &&
                   (hasDiscount ? (

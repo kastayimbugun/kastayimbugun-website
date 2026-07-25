@@ -105,3 +105,10 @@ export const setStatusSchema = z.object({
   id: z.uuid(),
   status: z.enum(["draft", "published", "archived"]),
 });
+
+/** Bir tarih aralığındaki onaylı rezervasyonu iptal edip tarihleri açma. */
+export const cancelReservationSchema = z.object({
+  villaId: z.uuid(),
+  startsOn: z.string().regex(iso),
+  endsOn: z.string().regex(iso),
+});

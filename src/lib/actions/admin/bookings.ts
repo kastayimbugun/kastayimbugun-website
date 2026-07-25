@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getStaffUser } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import { updateBookingStatusSchema } from "@/lib/schemas/adminBooking";
+import { cancelReservationSchema } from "@/lib/schemas/adminVilla";
 
 export type BookingActionResult =
   | { ok: true }
@@ -80,5 +81,61 @@ export async function updateBookingStatus(
 
   revalidatePath("/yonetim/talepler");
   if (slug) revalidatePath(`/villa/${slug}`);
+  return { ok: true };
+}
+
+/**
+ * Villa takviminden bir tarih aralığındaki onaylı rezervasyonu iptal eder ve
+ * tarihleri açar. İlgili talebi 'cancelled' yapar (veri tutarlılığı) ve
+ * booking bloğunu kaldırır.
+ */
+export async function cancelReservation(
+  input: unknown
+): Promise<BookingActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = cancelReservationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "validation" };
+  const { villaId, startsOn, endsOn } = parsed.data;
+
+  const supabase = await supabaseSession();
+
+  // Eşleşen onaylı talebi iptale çevir (varsa)
+  const { data: booking } = await supabase
+    .from("booking_requests")
+    .select("id")
+    .eq("villa_id", villaId)
+    .eq("check_in", startsOn)
+    .eq("check_out", endsOn)
+    .eq("status", "confirmed")
+    .maybeSingle();
+
+  if (booking) {
+    await supabase
+      .from("booking_requests")
+      .update({ status: "cancelled" })
+      .eq("id", booking.id);
+  }
+
+  // Booking bloğunu kaldır (tarihleri aç)
+  const { error } = await supabase
+    .from("villa_blocks")
+    .delete()
+    .eq("villa_id", villaId)
+    .eq("starts_on", startsOn)
+    .eq("ends_on", endsOn)
+    .eq("source", "booking");
+  if (error) return { ok: false, error: "generic" };
+
+  const { data: villa } = await supabase
+    .from("villas")
+    .select("slug")
+    .eq("id", villaId)
+    .maybeSingle();
+
+  revalidatePath(`/yonetim/villalar/${villaId}`);
+  revalidatePath("/yonetim/talepler");
+  if (villa?.slug) revalidatePath(`/villa/${villa.slug}`);
   return { ok: true };
 }

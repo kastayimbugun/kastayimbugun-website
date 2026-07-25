@@ -91,7 +91,11 @@ export default async function VillaDetayPage({
               label: "Takvim",
               content: (
                 <div className="rounded-2xl border border-sand-200 bg-white p-5">
-                  <BlockEditor villaId={full.id} blocks={detail.blocks} />
+                  <BlockEditor
+                    villaId={full.id}
+                    blocks={detail.blocks}
+                    seasons={detail.seasons}
+                  />
                 </div>
               ),
             },
