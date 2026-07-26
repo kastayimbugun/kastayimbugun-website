@@ -51,3 +51,30 @@ export const statusOptions: { value: string; label: string }[] = [
   { value: "published", label: "Yayında" },
   { value: "archived", label: "Arşiv" },
 ];
+
+// Kategori renkleri (site kategori rozetleriyle eşleşir)
+export const categoryColorOptions: { value: string; label: string }[] = [
+  { value: "sky", label: "Mavi" },
+  { value: "amber", label: "Amber" },
+  { value: "rose", label: "Pembe" },
+  { value: "emerald", label: "Yeşil" },
+  { value: "violet", label: "Mor" },
+  { value: "teal", label: "Turkuaz" },
+];
+
+// Kategori ikonları — src/lib/categoryIcons.tsx ile eşleşmeli
+export const categoryIconOptions: { value: string; label: string }[] = [
+  { value: "WavesHorizontal", label: "Dalga (deniz)" },
+  { value: "Gem", label: "Elmas (lüks)" },
+  { value: "Heart", label: "Kalp (balayı)" },
+  { value: "Ship", label: "Gemi (denize yakın)" },
+  { value: "Flame", label: "Alev (ısıtmalı)" },
+  { value: "Wallet", label: "Cüzdan (ekonomik)" },
+  { value: "Flower2", label: "Çiçek (bahçe)" },
+  { value: "Sparkles", label: "Işıltı (özel)" },
+  { value: "Thermometer", label: "Termometre (sauna)" },
+  { value: "Sunset", label: "Gün batımı" },
+  { value: "PawPrint", label: "Pati (evcil dostu)" },
+  { value: "Baby", label: "Bebek (çocuk)" },
+  { value: "Lock", label: "Kilit (korunaklı)" },
+];

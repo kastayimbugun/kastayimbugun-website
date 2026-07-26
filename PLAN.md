@@ -314,9 +314,10 @@ Yapım sırası: 5.0 kimlik altyapısı → 5.1 talepler → 5.2 villa → 5.3 s
 
 **İlerleme:** 5.0 ✅ (giriş/çıkış, dört katmanlı yetki, dashboard) · 5.1 ✅ (talep
 listesi + durum + onayda otomatik takvim) · 5.2 ✅ (tüm villa alanları düzenleme +
-oluşturma) · 5.3 ✅ (sezon fiyatı + takvim/blok) · 5.4 ✅ (görsel yükleme/sıralama/silme).
-Kalan: 5.5 bölge+kategori yönetimi, 5.6 dashboard zenginleştirme. Panel henüz `main`'e
-alınmadı (canlı değil) — istenince merge edilecek.
+oluşturma) · 5.3 ✅ (sezon fiyatı + görsel takvimle tarih kapatma, dolu gün notu,
+rezervasyon iptali) · 5.4 ✅ (görsel yükleme/sıralama/silme) · 5.5 ✅ (bölge + kategori
+yönetimi, kategoriye villa atama). Kalan: 5.6 dashboard zenginleştirme (opsiyonel).
+Panel henüz `main`'e alınmadı (canlı değil) — istenince merge edilecek.
 
 **Amaç:** Acente kendi villasını, fiyatını, takvimini kendi girsin; sana bağımlı kalmasın.
 
