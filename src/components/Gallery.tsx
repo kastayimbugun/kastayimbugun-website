@@ -75,6 +75,27 @@ export default function Gallery({
         </button>
       </div>
 
+      {/* Mobil: diğer fotoğrafların önizleme şeridi (birden fazla foto olduğunu gösterir) */}
+      {images.length > 1 && (
+        <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto sm:hidden">
+          {images.slice(1).map((src, i) => (
+            <button
+              key={i}
+              onClick={() => show(i + 1)}
+              className="relative h-20 w-28 shrink-0 overflow-hidden rounded-xl"
+            >
+              <Image
+                src={src}
+                alt={`${name} ${i + 2}`}
+                fill
+                sizes="112px"
+                className="object-cover transition hover:brightness-95"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
       {open && (
         <div className="fixed inset-0 z-[60] flex flex-col bg-brand-950/95">
           <div className="flex items-center justify-between p-4 text-white">
