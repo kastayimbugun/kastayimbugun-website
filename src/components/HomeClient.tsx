@@ -10,6 +10,7 @@ import {
   BadgePercent,
   ArrowRight,
 } from "lucide-react";
+import HeroMedia from "@/components/HeroMedia";
 import SearchBar from "@/components/SearchBar";
 import VillaCard from "@/components/VillaCard";
 import ShortStayDeals from "@/components/ShortStayDeals";
@@ -20,19 +21,20 @@ import { useI18n } from "@/lib/i18n";
 import type { Villa } from "@/lib/types";
 import type { Region } from "@/lib/data/villas";
 import type { Category } from "@/lib/data/categories";
-
-const HERO_VIDEO_ID = "0iQLhONQlgM";
+import type { SiteSettings } from "@/lib/data/site";
 
 export default function HomeClient({
   villas,
   featured,
   regions,
   categories,
+  site,
 }: {
   villas: Villa[];
   featured: Villa[];
   regions: Region[];
   categories: Category[];
+  site: SiteSettings;
 }) {
   const { t, lang } = useI18n();
 
@@ -45,39 +47,23 @@ export default function HomeClient({
 
   const featuredCategories = categories.filter((c) => c.featuredOnHome);
 
-  const regionCount = (name: string) =>
-    villas.filter((v) => v.region === name).length;
+  const inRegion = (name: string) => villas.filter((v) => v.region === name);
+  const regionCount = (name: string) => inRegion(name).length;
+
+  /** Panelden yüklenen bölge görseli yoksa o bölgedeki bir villanın fotoğrafı. */
+  const regionImage = (r: Region) =>
+    r.heroImage ?? inRegion(r.name).find((v) => v.images[0])?.images[0] ?? null;
+
+  // Site geneli görsel ayarlanmadıysa vitrindeki villalardan biri devreye girer.
+  const showcaseImage =
+    [...featured, ...villas].find((v) => v.images[0])?.images[0] ?? null;
+  const heroImage = site.heroImage ?? showcaseImage;
 
   return (
     <div>
       {/* HERO */}
       <section className="relative z-20">
-        <div className="absolute inset-0 overflow-hidden bg-brand-950">
-          {/* Poster — video yüklenene kadar */}
-          <Image
-            src="https://picsum.photos/seed/villahero/1920/1080"
-            alt=""
-            fill
-            priority
-            className="object-cover"
-          />
-          {/* Arka plan videosu */}
-          <iframe
-            title="Villa arka plan videosu"
-            src={`https://www.youtube.com/embed/${HERO_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${HERO_VIDEO_ID}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&disablekb=1&fs=0&iv_load_policy=3`}
-            allow="autoplay; encrypted-media"
-            className="pointer-events-none absolute left-1/2 top-1/2 border-0"
-            style={{
-              width: "max(100%, 177.78vh)",
-              height: "max(100%, 56.25vw)",
-              transform: "translate(-50%, -50%) scale(1.45)",
-            }}
-          />
-          {/* Metin okunurluğu için koyu degrade */}
-          <div className="absolute inset-0 bg-gradient-to-b from-brand-950/75 via-brand-950/40 to-brand-950/25" />
-          {/* Alt kenarda kademeli beyaz geçiş — beyaz bölüme yumuşak birleşim */}
-          <div className="absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-white via-white/75 to-transparent" />
-        </div>
+        <HeroMedia image={heroImage} videoUrl={site.heroVideoUrl} />
 
         <div className="relative mx-auto max-w-7xl px-4 pb-8 pt-16 sm:px-6 sm:pt-20">
           <div className="animate-fade-up text-center">
@@ -149,15 +135,17 @@ export default function HomeClient({
               <Link
                 key={r.slug}
                 href={`/villalar?region=${encodeURIComponent(r.name)}`}
-                className="group relative aspect-[16/10] overflow-hidden rounded-2xl"
+                className="group relative aspect-[16/10] overflow-hidden rounded-2xl bg-brand-800"
               >
-                <Image
-                  src={`https://picsum.photos/seed/region-${r.slug}/800/500`}
-                  alt={r.name}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                  className="object-cover transition duration-500 group-hover:scale-110"
-                />
+                {regionImage(r) && (
+                  <Image
+                    src={regionImage(r)!}
+                    alt={r.name}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-cover transition duration-500 group-hover:scale-110"
+                  />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-brand-950/80 via-transparent to-transparent" />
                 <div className="absolute bottom-0 left-0 p-5">
                   <h3 className="text-xl font-bold text-white">{r.name}</h3>
@@ -203,14 +191,17 @@ export default function HomeClient({
       {/* CTA */}
       <section className="mx-auto max-w-7xl px-4 pb-4 sm:px-6">
         <div className="relative overflow-hidden rounded-3xl bg-brand-800 px-6 py-14 text-center sm:px-12">
-          <div className="absolute inset-0 opacity-20">
-            <Image
-              src="https://picsum.photos/seed/villacta/1600/600"
-              alt=""
-              fill
-              className="object-cover"
-            />
-          </div>
+          {showcaseImage && (
+            <div className="absolute inset-0 opacity-20">
+              <Image
+                src={showcaseImage}
+                alt=""
+                fill
+                sizes="(max-width: 1280px) 100vw, 1280px"
+                className="object-cover"
+              />
+            </div>
+          )}
           <div className="relative mx-auto max-w-2xl">
             <h2 className="text-2xl font-extrabold text-white sm:text-3xl">
               {t("home.ctaTitle")}

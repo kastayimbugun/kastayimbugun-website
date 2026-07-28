@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseSession } from "@/lib/supabase/session";
+import { imageUrl } from "@/lib/images/url";
 
 export interface RegionOption {
   id: string;
@@ -23,7 +24,8 @@ export interface AdminRegion {
   slug: string;
   name: string;
   province: string;
-  heroImage: string | null;
+  /** Önizleme için tam URL; görsel yoksa null. */
+  heroImageUrl: string | null;
   sortOrder: number;
   villaCount: number;
 }
@@ -58,7 +60,7 @@ export async function getAdminRegions(): Promise<AdminRegion[]> {
     slug: r.slug,
     name: r.name,
     province: r.province,
-    heroImage: r.hero_image,
+    heroImageUrl: imageUrl(r.hero_image),
     sortOrder: r.sort_order,
     villaCount: counts.get(r.id) ?? 0,
   }));

@@ -7,19 +7,24 @@ import {
   regionFormSchema,
   updateRegionSchema,
   deleteRegionSchema,
+  regionIdSchema,
   type RegionFormInput,
 } from "@/lib/schemas/adminRegion";
+import { storeImage, removeImage } from "@/lib/images/store";
 
 export type RegionResult =
   | { ok: true; id?: string }
   | { ok: false; error: "auth" | "validation" | "slug" | "inuse" | "generic" };
+
+export type RegionImageResult =
+  | { ok: true }
+  | { ok: false; error: "auth" | "validation" | "toobig" | "type" | "generic" };
 
 function toRow(d: RegionFormInput) {
   return {
     name: d.name,
     province: d.province,
     slug: d.slug,
-    hero_image: d.heroImage,
     sort_order: d.sortOrder,
   };
 }
@@ -69,6 +74,77 @@ export async function updateRegion(input: unknown): Promise<RegionResult> {
   }
   revalidate();
   return { ok: true, id };
+}
+
+/** Bölgenin mevcut kart görselinin Storage yolu (eskisini silmek için). */
+async function currentHero(
+  supabase: Awaited<ReturnType<typeof supabaseSession>>,
+  id: string
+) {
+  const { data } = await supabase
+    .from("regions")
+    .select("slug, hero_image")
+    .eq("id", id)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** Bölge kartı görselini yükler. FormData: regionId, file. */
+export async function uploadRegionHero(
+  formData: FormData
+): Promise<RegionImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = regionIdSchema.safeParse({ id: formData.get("regionId") });
+  if (!parsed.success) return { ok: false, error: "validation" };
+
+  const supabase = await supabaseSession();
+  const region = await currentHero(supabase, parsed.data.id);
+  if (!region) return { ok: false, error: "validation" };
+
+  const stored = await storeImage(
+    supabase,
+    formData.get("file"),
+    `bolgeler/${region.slug}`
+  );
+  if (!stored.ok) return stored;
+
+  const { error } = await supabase
+    .from("regions")
+    .update({ hero_image: stored.path })
+    .eq("id", parsed.data.id);
+  if (error) {
+    await removeImage(supabase, stored.path); // kayıt olmadıysa dosyayı bırakma
+    return { ok: false, error: "generic" };
+  }
+
+  await removeImage(supabase, region.hero_image);
+  revalidate();
+  return { ok: true };
+}
+
+export async function removeRegionHero(
+  input: unknown
+): Promise<RegionImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = regionIdSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "validation" };
+
+  const supabase = await supabaseSession();
+  const region = await currentHero(supabase, parsed.data.id);
+
+  const { error } = await supabase
+    .from("regions")
+    .update({ hero_image: null })
+    .eq("id", parsed.data.id);
+  if (error) return { ok: false, error: "generic" };
+
+  await removeImage(supabase, region?.hero_image);
+  revalidate();
+  return { ok: true };
 }
 
 export async function deleteRegion(input: unknown): Promise<RegionResult> {

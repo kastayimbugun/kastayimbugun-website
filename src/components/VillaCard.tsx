@@ -45,7 +45,7 @@ export default function VillaCard({ villa }: { villa: Villa }) {
           src={villa.images[0]}
           alt={code}
           fill
-          sizes="(max-width: 768px) 100vw, 33vw"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           className="object-cover transition duration-500 group-hover:scale-110"
         />
 

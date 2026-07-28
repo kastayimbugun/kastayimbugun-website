@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { imageUrl } from "@/lib/images/url";
 import type { Villa, AmenityKey, PoolType } from "@/lib/types";
 
 /**
@@ -53,12 +54,6 @@ interface VillaRow {
     price: number;
   }[];
   villa_blocks: { starts_on: string; ends_on: string }[];
-}
-
-/** Storage yolunu tam URL'ye çevirir. Demo veride zaten tam URL geliyor. */
-function imageUrl(path: string) {
-  if (path.startsWith("http")) return path;
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/villa-images/${path}`;
 }
 
 /** "16:00:00" → "16:00" */
@@ -154,14 +149,22 @@ export interface Region {
   slug: string;
   name: string;
   province: string;
+  /** Bölge kartı görseli. Panelden yüklenmediyse null — kart o zaman bölgedeki
+   *  bir villanın fotoğrafına düşer (bkz. HomeClient). */
+  heroImage: string | null;
 }
 
 export async function getRegions(): Promise<Region[]> {
   const { data, error } = await supabaseServer()
     .from("regions")
-    .select("slug, name, province")
+    .select("slug, name, province, hero_image")
     .order("sort_order");
 
   if (error) throw new Error(`Bölgeler okunamadı: ${error.message}`);
-  return data;
+  return data.map((r) => ({
+    slug: r.slug,
+    name: r.name,
+    province: r.province,
+    heroImage: imageUrl(r.hero_image),
+  }));
 }

@@ -8,13 +8,13 @@ import {
   reorderImageSchema,
   deleteChildSchema,
 } from "@/lib/schemas/adminVilla";
+import { processImage } from "@/lib/images/process";
+import { MAX_UPLOAD_BYTES } from "@/lib/images/limits";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ImageResult =
   | { ok: true }
   | { ok: false; error: "auth" | "validation" | "toobig" | "type" | "generic" };
-
-const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
 async function revalidateVilla(supabase: SupabaseClient, villaId: string) {
   const { data } = await supabase
@@ -38,7 +38,12 @@ export async function uploadImage(formData: FormData): Promise<ImageResult> {
     return { ok: false, error: "validation" };
   }
   if (!file.type.startsWith("image/")) return { ok: false, error: "type" };
-  if (file.size > MAX_BYTES) return { ok: false, error: "toobig" };
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: "toobig" };
+
+  // Yayına hazırla: 2000px WebP, EXIF (konum dahil) temizlenir.
+  // Aynı zamanda dosyanın gerçekten görsel olduğunun kanıtı — uzantıya güvenmiyoruz.
+  const processed = await processImage(file);
+  if (!processed) return { ok: false, error: "type" };
 
   const supabase = await supabaseSession();
 
@@ -58,20 +63,24 @@ export async function uploadImage(formData: FormData): Promise<ImageResult> {
     .limit(1);
   const nextOrder = (last?.[0]?.sort_order ?? -1) + 1;
 
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const path = `villalar/${villa.slug}/${Date.now()}-${Math.random()
     .toString(36)
-    .slice(2, 8)}.${ext}`;
+    .slice(2, 8)}.${processed.ext}`;
 
   const { error: upErr } = await supabase.storage
     .from("villa-images")
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, processed.buffer, {
+      contentType: processed.contentType,
+      upsert: false,
+    });
   if (upErr) return { ok: false, error: "generic" };
 
   const { error: rowErr } = await supabase.from("villa_images").insert({
     villa_id: villaId,
     storage_path: path,
     sort_order: nextOrder,
+    width: processed.width,
+    height: processed.height,
   });
   if (rowErr) {
     // kayıt başarısızsa yüklenen dosyayı geri al

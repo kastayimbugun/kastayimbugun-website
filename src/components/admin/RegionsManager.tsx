@@ -7,10 +7,13 @@ import {
   createRegion,
   updateRegion,
   deleteRegion,
+  uploadRegionHero,
+  removeRegionHero,
 } from "@/lib/actions/admin/regions";
+import ImageUploadField from "@/components/admin/ImageUploadField";
 import type { AdminRegion } from "@/lib/data/admin/regions";
 
-const empty = { name: "", province: "", slug: "", heroImage: "", sortOrder: "0" };
+const empty = { name: "", province: "", slug: "", sortOrder: "0" };
 
 const slugify = (s: string) =>
   s
@@ -37,6 +40,8 @@ export default function RegionsManager({
   const set = (k: keyof typeof empty, v: string) =>
     setF((p) => ({ ...p, [k]: v }));
 
+  const editing = regions.find((r) => r.id === editId) ?? null;
+
   const startEdit = (r: AdminRegion) => {
     setError(null);
     setEditId(r.id);
@@ -44,7 +49,6 @@ export default function RegionsManager({
       name: r.name,
       province: r.province,
       slug: r.slug,
-      heroImage: r.heroImage ?? "",
       sortOrder: String(r.sortOrder),
     });
   };
@@ -106,6 +110,16 @@ export default function RegionsManager({
                 editId === r.id ? "bg-brand-50" : ""
               }`}
             >
+              <div className="h-11 w-16 shrink-0 overflow-hidden rounded-lg bg-sand-100">
+                {r.heroImageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={r.heroImageUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-brand-900">{r.name}</div>
                 <div className="text-sm text-brand-900/55">
@@ -176,10 +190,6 @@ export default function RegionsManager({
             <span className="mb-1 block text-xs font-semibold text-brand-900/60">Sıra</span>
             <input type="number" min={0} className={inputCls} value={f.sortOrder} onChange={(e) => set("sortOrder", e.target.value)} />
           </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-brand-900/60">Görsel URL (opsiyonel)</span>
-            <input className={inputCls} value={f.heroImage} onChange={(e) => set("heroImage", e.target.value)} placeholder="https://…" />
-          </label>
 
           {error && <p className="text-sm text-rose-600">{error}</p>}
 
@@ -191,6 +201,34 @@ export default function RegionsManager({
             {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
             {editId ? "Kaydet" : "Ekle"}
           </button>
+        </div>
+
+        {/* Kart görseli — ancak bölge kaydedildikten sonra yüklenebilir */}
+        <div className="mt-5 border-t border-sand-100 pt-4">
+          <h3 className="text-xs font-semibold text-brand-900/60">
+            Ana sayfadaki kart görseli
+          </h3>
+          {editing ? (
+            <div className="mt-2">
+              <ImageUploadField
+                url={editing.heroImageUrl}
+                alt={`${editing.name} bölge görseli`}
+                onUpload={(fd) => {
+                  fd.set("regionId", editing.id);
+                  return uploadRegionHero(fd);
+                }}
+                onRemove={() => removeRegionHero({ id: editing.id })}
+              />
+              <p className="mt-2 text-xs text-brand-900/45">
+                Yüklenmezse kart, bu bölgedeki bir villanın fotoğrafını
+                kullanır.
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-brand-900/45">
+              Görsel yüklemek için listeden bir bölge seçin.
+            </p>
+          )}
         </div>
       </div>
     </div>

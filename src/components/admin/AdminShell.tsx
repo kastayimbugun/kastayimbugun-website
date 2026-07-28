@@ -5,6 +5,7 @@ import {
   Home,
   MapPin,
   Tags,
+  Settings,
   LogOut,
 } from "lucide-react";
 import { signOutAction } from "@/lib/actions/admin/auth";
@@ -21,6 +22,7 @@ const nav = [
   { href: "/yonetim/villalar", label: "Villalar", icon: Home, ready: true },
   { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin, ready: true },
   { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags, ready: true },
+  { href: "/yonetim/ayarlar", label: "Site ayarları", icon: Settings, ready: true },
 ];
 
 const roleLabel: Record<StaffUser["role"], string> = {

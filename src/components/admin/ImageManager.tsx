@@ -9,6 +9,7 @@ import {
   reorderImage,
   updateImageAlt,
 } from "@/lib/actions/admin/images";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/images/limits";
 import type { AdminImage } from "@/lib/data/admin/villas";
 
 export default function ImageManager({
@@ -27,6 +28,15 @@ export default function ImageManager({
   const onFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setError(null);
+    // Sunucuya gitmeden ele: sınırı aşan istek Server Action gövde sınırına
+    // takılır ve hata nesnesi yerine ham hata fırlatır.
+    const tooBig = Array.from(files).find((f) => f.size > MAX_UPLOAD_BYTES);
+    if (tooBig) {
+      setError(`"${tooBig.name}" ${MAX_UPLOAD_LABEL}'tan büyük.`);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
     start(async () => {
       for (const file of Array.from(files)) {
         const fd = new FormData();
@@ -36,9 +46,9 @@ export default function ImageManager({
         if (!res.ok) {
           setError(
             res.error === "toobig"
-              ? "Görsel 8 MB'tan büyük olamaz."
+              ? `Görsel ${MAX_UPLOAD_LABEL}'tan büyük olamaz.`
               : res.error === "type"
-                ? "Yalnızca görsel dosyası yüklenebilir."
+                ? "Dosya okunamadı — yalnızca görsel yüklenebilir."
                 : "Yüklenemedi."
           );
           break;
