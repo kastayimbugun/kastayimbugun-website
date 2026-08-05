@@ -265,6 +265,13 @@ create table contact_messages (
 
 ## FAZ 3 — Görsel ve medya hattı
 
+**Durum: kod tarafı tamam (28.07.2026).** Yüklenen her görsel sunucuda işleniyor
+(2000px, WebP, EXIF/konum temizliği, width/height DB'ye), ana sayfada picsum kalmadı,
+hero'daki otomatik YouTube iframe'i kaldırıldı. Ana sayfa görseli/videosu ve bölge kartı
+görseli artık panelden yönetiliyor (`/yonetim/ayarlar`, `/yonetim/bolgeler`).
+**Yapılacak:** `0003_site_settings.sql` migration'ını Supabase'de çalıştır; gerçek villa
+fotoğraflarını yükle; hero için kısa mp4 hazırla. Lighthouse ölçümü fotoğraflar girince.
+
 **Amaç:** picsum yerine gerçek villa fotoğrafları; hızlı ve düzgün.
 
 **İşler**
@@ -316,8 +323,14 @@ Yapım sırası: 5.0 kimlik altyapısı → 5.1 talepler → 5.2 villa → 5.3 s
 listesi + durum + onayda otomatik takvim) · 5.2 ✅ (tüm villa alanları düzenleme +
 oluşturma) · 5.3 ✅ (sezon fiyatı + görsel takvimle tarih kapatma, dolu gün notu,
 rezervasyon iptali) · 5.4 ✅ (görsel yükleme/sıralama/silme) · 5.5 ✅ (bölge + kategori
-yönetimi, kategoriye villa atama). Kalan: 5.6 dashboard zenginleştirme (opsiyonel).
-Panel henüz `main`'e alınmadı (canlı değil) — istenince merge edilecek.
+yönetimi, kategoriye villa atama) · Site ayarları ekranı ✅ (Faz 3 ile birlikte).
+Panel `main`'de ve canlıda.
+
+**Faz 5.6 — panel olgunlaştırma (04.08.2026 denetimi sonrası, artık opsiyonel değil).**
+Panel kod denetimi + sektör araştırması: **[docs/panel-yol-haritasi.md](docs/panel-yol-haritasi.md)**.
+45 bulgu, 5 dalgaya bölünmüş. Dalga 0 (veri kaybettiren 3 hata + mobilde menü olmaması)
+yayın öncesi kapatılmalı. Dalga 0+1 ≈ 2,5 gün, +Dalga 2 (Bugün ekranı, talep notları,
+satış hattı) ≈ 4,5 gün.
 
 **Amaç:** Acente kendi villasını, fiyatını, takvimini kendi girsin; sana bağımlı kalmasın.
 

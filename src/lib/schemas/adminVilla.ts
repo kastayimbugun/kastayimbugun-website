@@ -17,6 +17,22 @@ export const seasonSchema = z
     path: ["endsOn"],
   });
 
+/** Sezon fiyatı düzenleme. */
+export const updateSeasonSchema = z
+  .object({
+    id: z.uuid(),
+    villaId: z.uuid(),
+    labelTr: z.string().trim().min(1, "Etiket gerekli").max(60),
+    labelEn: z.string().trim().min(1, "Etiket gerekli").max(60),
+    startsOn: z.string().regex(iso, "Geçerli tarih girin"),
+    endsOn: z.string().regex(iso, "Geçerli tarih girin"),
+    price: z.coerce.number().nonnegative("Fiyat negatif olamaz"),
+  })
+  .refine((d) => d.endsOn > d.startsOn, {
+    message: "Bitiş, başlangıçtan sonra olmalı",
+    path: ["endsOn"],
+  });
+
 /** Takvimde tarih kapatma (elle blok). */
 export const blockSchema = z
   .object({
@@ -55,6 +71,27 @@ export const villaFormSchema = z.object({
   pool: z.enum(["private", "shared", "none"]),
   sizeM2: z.coerce.number().int().min(0).max(100000),
   distanceToSea: z.coerce.number().int().min(0).max(1000000),
+  // Mesafe cetveli — hepsi opsiyonel (km). Boş bırakılırsa o satır gösterilmez.
+  distanceAirportKm: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(20000).nullable()
+  ),
+  distanceMarketKm: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(20000).nullable()
+  ),
+  distanceRestaurantKm: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(20000).nullable()
+  ),
+  distanceTransitKm: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(20000).nullable()
+  ),
+  distanceCenterKm: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(20000).nullable()
+  ),
   rating: z.coerce.number().min(0).max(5),
   reviewCount: z.coerce.number().int().min(0),
   featured: z.coerce.boolean(),
@@ -98,12 +135,6 @@ export const reorderImageSchema = z.object({
   id: z.uuid(),
   villaId: z.uuid(),
   direction: z.enum(["up", "down"]),
-});
-
-/** Durum hızlı değiştirme. */
-export const setStatusSchema = z.object({
-  id: z.uuid(),
-  status: z.enum(["draft", "published", "archived"]),
 });
 
 /** Bir tarih aralığındaki onaylı rezervasyonu iptal edip tarihleri açma. */

@@ -10,6 +10,120 @@ export function imageUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/villa-images/${path}`;
 }
 
+export interface VillaOption {
+  id: string;
+  name: string;
+}
+
+/**
+ * Hafif villa listesi (id + ad) — açılır menüler ve seçim listeleri için.
+ * Kategori villa atama ekranı ile talep filtresi aynı kaynağı kullanır.
+ */
+export async function getVillaOptions(): Promise<VillaOption[]> {
+  const supabase = await supabaseSession();
+  const { data, error } = await supabase
+    .from("villas")
+    .select("id, name")
+    .order("name");
+  if (error) throw new Error(`Villalar okunamadı: ${error.message}`);
+  return data as VillaOption[];
+}
+
+export interface VillaPricingOption {
+  id: string;
+  name: string;
+  regionName: string;
+  capacity: number;
+  minNights: number;
+  pricePerNight: number;
+  cleaningFee: number;
+  serviceRate: number;
+  seasons: { start: string; end: string; price: number }[];
+  /**
+   * Dolu/kapalı tarih aralıkları + panelde günün üstüne gelince görünecek not
+   * ("kim kiralamış" — yalnızca panelde, herkese açık sitede geçilmez).
+   * Onaylı rezervasyona denk gelen blokta misafir adı, elle kapatılmış blokta
+   * varsa panel notu, hiçbiri yoksa genel "Kapalı" gösterilir.
+   */
+  bookedRanges: { start: string; end: string; note: string }[];
+}
+
+/**
+ * Manuel rezervasyon formu için villa listesi — `calcPrice`'ın (lib/pricing.ts)
+ * ihtiyaç duyduğu alanlarla birlikte. Arşivlenmiş villalar hariç: taslak dahil
+ * (henüz yayına girmemiş bir villaya da telefonla rezervasyon alınabilir).
+ */
+export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
+  const supabase = await supabaseSession();
+  const { data, error } = await supabase
+    .from("villas")
+    .select(
+      `id, name, capacity, min_nights, base_price, cleaning_fee, service_rate,
+       regions ( name ),
+       villa_seasons ( starts_on, ends_on, price ),
+       villa_blocks ( starts_on, ends_on, source, note ),
+       booking_requests ( full_name, check_in, check_out, status )`
+    )
+    .neq("status", "archived")
+    .order("name");
+  if (error) throw new Error(`Villalar okunamadı: ${error.message}`);
+
+  return (
+    data as unknown as Array<{
+      id: string;
+      name: string;
+      capacity: number;
+      min_nights: number;
+      base_price: number;
+      cleaning_fee: number;
+      service_rate: number;
+      regions: { name: string } | null;
+      villa_seasons: { starts_on: string; ends_on: string; price: number }[];
+      villa_blocks: {
+        starts_on: string;
+        ends_on: string;
+        source: string;
+        note: string | null;
+      }[];
+      booking_requests: {
+        full_name: string;
+        check_in: string;
+        check_out: string;
+        status: string;
+      }[];
+    }>
+  ).map((v) => {
+    const confirmed = v.booking_requests.filter((b) => b.status === "confirmed");
+    return {
+      id: v.id,
+      name: v.name,
+      regionName: v.regions?.name ?? "",
+      capacity: v.capacity,
+      minNights: v.min_nights,
+      pricePerNight: Number(v.base_price),
+      cleaningFee: Number(v.cleaning_fee ?? 0),
+      serviceRate: Number(v.service_rate ?? 0.05),
+      seasons: v.villa_seasons.map((s) => ({
+        start: s.starts_on,
+        end: s.ends_on,
+        price: Number(s.price),
+      })),
+      bookedRanges: v.villa_blocks.map((b) => {
+        // Bloğun tam tarih aralığına denk gelen onaylı talep varsa misafir
+        // adı gösterilir — villa_blocks'ta booking_requests'e FK yok, bu yüzden
+        // aynı villa+tarih aralığıyla eşleştirilir (updateBookingStatus'un
+        // bloğu yazma şekliyle aynı varsayım).
+        const guest = confirmed.find(
+          (r) => r.check_in === b.starts_on && r.check_out === b.ends_on
+        );
+        const note =
+          guest?.full_name ?? b.note ?? (b.source === "booking" ? "Rezervasyon" : "Kapalı");
+        return { start: b.starts_on, end: b.ends_on, note };
+      }),
+    };
+  });
+}
+
 export interface AdminVillaListItem {
   id: string;
   name: string;
@@ -67,6 +181,11 @@ export interface AdminVillaFull {
   pool: PoolType;
   sizeM2: number | null;
   distanceToSea: number | null;
+  distanceAirportKm: number | null;
+  distanceMarketKm: number | null;
+  distanceRestaurantKm: number | null;
+  distanceTransitKm: number | null;
+  distanceCenterKm: number | null;
   rating: number;
   reviewCount: number;
   featured: boolean;
@@ -93,7 +212,10 @@ export async function getVillaForEdit(
     .from("villas")
     .select(
       `id, slug, name, code, region_id, status, capacity, bedrooms, bathrooms,
-       pool, size_m2, distance_to_sea, rating, review_count, featured,
+       pool, size_m2, distance_to_sea,
+       distance_airport_km, distance_market_km, distance_restaurant_km,
+       distance_transit_km, distance_center_km,
+       rating, review_count, featured,
        discount_percent, deal_tag, check_in, check_out, min_nights,
        base_price, cleaning_fee, service_rate, description_tr, description_en,
        video_url, amenities,
@@ -127,6 +249,11 @@ export async function getVillaForEdit(
     pool: r.pool as PoolType,
     sizeM2: (r.size_m2 as number) ?? null,
     distanceToSea: (r.distance_to_sea as number) ?? null,
+    distanceAirportKm: (r.distance_airport_km as number) ?? null,
+    distanceMarketKm: (r.distance_market_km as number) ?? null,
+    distanceRestaurantKm: (r.distance_restaurant_km as number) ?? null,
+    distanceTransitKm: (r.distance_transit_km as number) ?? null,
+    distanceCenterKm: (r.distance_center_km as number) ?? null,
     rating: Number(r.rating ?? 0),
     reviewCount: (r.review_count as number) ?? 0,
     featured: Boolean(r.featured),

@@ -3,12 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { getStaffUser } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
-import { updateBookingStatusSchema } from "@/lib/schemas/adminBooking";
+import {
+  updateBookingStatusSchema,
+  bookingPaymentSchema,
+  manualBookingSchema,
+} from "@/lib/schemas/adminBooking";
 import { cancelReservationSchema } from "@/lib/schemas/adminVilla";
+import { toFieldErrors } from "@/lib/schemas/fieldErrors";
 
 export type BookingActionResult =
   | { ok: true }
-  | { ok: false; error: "auth" | "validation" | "conflict" | "generic" };
+  | {
+      ok: false;
+      error: "auth" | "validation" | "conflict" | "generic";
+      fields?: Record<string, string>;
+    };
 
 /**
  * Talep durumunu değiştirir. "confirmed" olunca ilgili tarihleri villa takviminde
@@ -138,4 +147,121 @@ export async function cancelReservation(
   revalidatePath("/yonetim/talepler");
   if (villa?.slug) revalidatePath(`/villa/${villa.slug}`);
   return { ok: true };
+}
+
+/**
+ * Ödenen tutar / hasar depozitosu / ödeme notunu kaydeder. Ödeme kapıya
+ * bağlı değil — acente banka transferiyle kapora alıyor, burada yalnızca
+ * kaydı tutuluyor (kaspanel26'daki "Ödenmiş" / "Hasar Depozito" karşılığı).
+ */
+export async function updateBookingPayment(
+  input: unknown
+): Promise<BookingActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = bookingPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
+  const { id, paidAmount, damageDeposit, depositNote } = parsed.data;
+
+  const supabase = await supabaseSession();
+  const { error } = await supabase
+    .from("booking_requests")
+    .update({
+      paid_amount: paidAmount,
+      damage_deposit: damageDeposit,
+      deposit_note: depositNote,
+    })
+    .eq("id", id);
+  if (error) return { ok: false, error: "generic" };
+
+  revalidatePath("/yonetim/talepler");
+  revalidatePath("/yonetim/rezervasyonlar");
+  revalidatePath(`/yonetim/talepler/${id}/konfirmasyon`);
+  return { ok: true };
+}
+
+export type ManualBookingResult =
+  | { ok: true; id: string }
+  | {
+      ok: false;
+      error: "auth" | "validation" | "conflict" | "generic";
+      fields?: Record<string, string>;
+    };
+
+/**
+ * Panelden doğrudan (telefonla gelen) rezervasyon girişi — talep aşamasını
+ * atlar, kayıt doğrudan `confirmed` olarak açılır ve villa takvimi hemen
+ * kapanır. Kaspanel26'daki manuel rezervasyon girişinin karşılığı.
+ *
+ * İki yazma tek işlem gibi ele alınır (docs/panel-kurallari.md §3, "çok
+ * adımlı işlemler atomik"): `villa_blocks` çakışma yüzünden başarısız olursa
+ * az önce oluşturulan talep de geri silinir — tutarsız/yetim kayıt kalmaz.
+ */
+export async function createManualBooking(
+  input: unknown
+): Promise<ManualBookingResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = manualBookingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
+  const d = parsed.data;
+
+  const supabase = await supabaseSession();
+
+  const { data: row, error: insErr } = await supabase
+    .from("booking_requests")
+    .insert({
+      villa_id: d.villaId,
+      check_in: d.checkIn,
+      check_out: d.checkOut,
+      adults: d.adults,
+      children: d.children,
+      babies: d.babies,
+      full_name: d.fullName,
+      phone: d.phone,
+      email: d.email,
+      note: d.note,
+      price_estimate: d.priceEstimate,
+      paid_amount: d.paidAmount,
+      damage_deposit: d.damageDeposit,
+      status: "confirmed",
+      source: "panel-manual",
+    })
+    .select("id")
+    .single();
+
+  if (insErr || !row) return { ok: false, error: "generic" };
+
+  const { error: blockErr } = await supabase.from("villa_blocks").insert({
+    villa_id: d.villaId,
+    starts_on: d.checkIn,
+    ends_on: d.checkOut,
+    source: "booking",
+    note: "Panelden manuel eklenen rezervasyon",
+  });
+
+  if (blockErr) {
+    // Talep zaten yazıldı ama takvim kapatılamadı — yetim kayıt bırakma.
+    await supabase.from("booking_requests").delete().eq("id", row.id);
+    if (blockErr.code === "23P01") return { ok: false, error: "conflict" };
+    return { ok: false, error: "generic" };
+  }
+
+  const { data: villa } = await supabase
+    .from("villas")
+    .select("slug")
+    .eq("id", d.villaId)
+    .maybeSingle();
+
+  revalidatePath("/yonetim/rezervasyonlar");
+  revalidatePath("/yonetim/talepler");
+  revalidatePath(`/yonetim/villalar/${d.villaId}`);
+  if (villa?.slug) revalidatePath(`/villa/${villa.slug}`);
+  return { ok: true, id: row.id };
 }

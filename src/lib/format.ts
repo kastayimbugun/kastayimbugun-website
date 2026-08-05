@@ -32,6 +32,25 @@ export function formatDateShort(iso: string, lang: Lang = "tr") {
   }).format(d);
 }
 
+/**
+ * Tam zaman damgası, ör. "3 Ağu 2026 14:20".
+ *
+ * Saat dilimi bilerek Europe/Istanbul'a sabitlenir: sayfa sunucuda render
+ * ediliyor ve Vercel UTC çalışıyor — sabitlenmezse acente saatleri 3 saat
+ * geride görür. Talep tarihinde yıl ve saat şart (farklı yılların talepleri
+ * ayırt edilebilsin, yanıt süresi hesaplanabilsin).
+ */
+export function formatDateTime(iso: string, lang: Lang = "tr") {
+  return new Intl.DateTimeFormat(lang === "tr" ? "tr-TR" : "en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Istanbul",
+  }).format(new Date(iso));
+}
+
 /** yyyy-mm-dd for a Date, in local time. */
 export function toISO(d: Date) {
   const y = d.getFullYear();

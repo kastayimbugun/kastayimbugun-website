@@ -46,7 +46,7 @@ export default function Gallery({
             src={images[0]}
             alt={name}
             fill
-            priority
+            preload
             sizes="(max-width: 640px) 100vw, 50vw"
             className="object-cover transition hover:brightness-95"
           />

@@ -8,6 +8,9 @@ import { cancelReservation } from "@/lib/actions/admin/bookings";
 import { formatDateShort } from "@/lib/format";
 import { rangeHasConflict } from "@/lib/availability";
 import AvailabilityCalendar from "@/components/AvailabilityCalendar";
+import { useToast } from "@/components/admin/ui/Toast";
+import { useConfirm } from "@/components/admin/ui/ConfirmDialog";
+import { labelCls } from "@/components/admin/ui/styles";
 import type { AdminBlock, AdminSeason } from "@/lib/data/admin/villas";
 
 export default function BlockEditor({
@@ -20,10 +23,11 @@ export default function BlockEditor({
   seasons: AdminSeason[];
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   // Kapalı/dolu tarihler takvimde "Dolu" olarak görünür
@@ -47,7 +51,6 @@ export default function BlockEditor({
 
   // Sitedeki aralık seçim mantığının aynısı
   const onDayClick = (iso: string) => {
-    setError(null);
     if (!checkIn || (checkIn && checkOut)) {
       setCheckIn(iso);
       setCheckOut(null);
@@ -68,7 +71,6 @@ export default function BlockEditor({
 
   const close = () => {
     if (!checkIn || !checkOut) return;
-    setError(null);
     start(async () => {
       const res = await addBlock({
         villaId,
@@ -77,49 +79,63 @@ export default function BlockEditor({
         note,
       });
       if (res.ok) {
+        toast.success(
+          `${formatDateShort(checkIn)} – ${formatDateShort(checkOut)} kapatıldı.`
+        );
         setCheckIn(null);
         setCheckOut(null);
         setNote("");
         router.refresh();
       } else {
-        setError(
+        toast.error(
           res.error === "conflict"
             ? "Bu tarihler zaten kapalı/dolu."
             : res.error === "validation"
               ? "Geçerli bir aralık seçin."
-              : "Kapatılamadı."
+              : res.error === "auth"
+                ? "Oturumunuz sona ermiş. Yeniden giriş yapın."
+                : "Kapatılamadı."
         );
       }
     });
   };
 
-  const open = (id: string) => {
-    setError(null);
+  const open = (b: AdminBlock) => {
     start(async () => {
-      const res = await removeBlock({ id, villaId });
-      if (res.ok) router.refresh();
-      else setError("Açılamadı.");
+      const res = await removeBlock({ id: b.id, villaId });
+      if (res.ok) {
+        toast.success("Tarihler yeniden müsait.");
+        router.refresh();
+      } else {
+        toast.error("Açılamadı.");
+      }
     });
   };
 
-  const cancelBooking = (b: AdminBlock) => {
-    if (
-      !window.confirm(
-        `${formatDateShort(b.startsOn)} – ${formatDateShort(
-          b.endsOn
-        )} rezervasyonunu iptal edip tarihleri açmak istiyor musunuz?`
-      )
-    )
-      return;
-    setError(null);
+  const cancelBooking = async (b: AdminBlock) => {
+    const ok = await confirm({
+      title: "Rezervasyon iptal edilsin mi?",
+      body: `${formatDateShort(b.startsOn)} – ${formatDateShort(
+        b.endsOn
+      )} tarihleri sitede yeniden müsait görünecek ve ilgili talep "İptal" durumuna geçecek.`,
+      confirmLabel: "İptal et",
+      cancelLabel: "Vazgeç",
+      tone: "danger",
+    });
+    if (!ok) return;
+
     start(async () => {
       const res = await cancelReservation({
         villaId,
         startsOn: b.startsOn,
         endsOn: b.endsOn,
       });
-      if (res.ok) router.refresh();
-      else setError("İptal edilemedi.");
+      if (res.ok) {
+        toast.success("Rezervasyon iptal edildi, tarihler açıldı.");
+        router.refresh();
+      } else {
+        toast.error("İptal edilemedi.");
+      }
     });
   };
 
@@ -136,36 +152,41 @@ export default function BlockEditor({
       />
 
       {/* Seçim + kapat çubuğu */}
-      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-sand-200 bg-sand-50 p-3 sm:flex-row sm:items-center">
-        <div className="text-sm">
+      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-sand-200 bg-sand-50 p-3 sm:flex-row sm:items-end">
+        <div className="text-sm sm:pb-2">
           {checkIn && checkOut ? (
             <span className="font-semibold text-brand-950">
               {formatDateShort(checkIn)} – {formatDateShort(checkOut)}
-              <span className="ml-1 font-normal text-brand-900/50">
+              <span className="ml-1 font-normal text-brand-900/70">
                 kapatılacak
               </span>
             </span>
           ) : checkIn ? (
-            <span className="text-brand-900/60">
+            <span className="text-brand-900/70">
               Bitiş tarihini seçin ({formatDateShort(checkIn)} →)
             </span>
           ) : (
-            <span className="text-brand-900/50">
+            <span className="text-brand-900/70">
               Takvimden kapatılacak aralığı seçin.
             </span>
           )}
         </div>
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Kime/hangi firma (ör. X Turizm)"
-          title="Dolu günün üstüne gelince görünür"
-          className="rounded-lg border border-sand-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-brand-400 sm:ml-auto sm:w-56"
-        />
+
+        <label className="block sm:ml-auto sm:w-56">
+          <span className={labelCls}>Kapatma notu</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Ör. X Turizm"
+            className="w-full rounded-lg border border-sand-200 bg-white px-2.5 py-2 text-sm text-brand-950 outline-none transition placeholder:text-brand-900/45 focus:border-brand-500 focus:ring-2 focus:ring-brand-300"
+          />
+        </label>
+
         <button
+          type="button"
           onClick={close}
           disabled={pending || !checkIn || !checkOut}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-sand-200 disabled:text-brand-900/40"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-800 focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-sand-200 disabled:text-brand-900/50"
         >
           {pending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -175,7 +196,6 @@ export default function BlockEditor({
           Seçili tarihleri kapat
         </button>
       </div>
-      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
 
       {/* Kapalı tarihler listesi */}
       <div className="mt-5">
@@ -183,7 +203,9 @@ export default function BlockEditor({
           Kapalı Tarihler
         </h3>
         {blocks.length === 0 ? (
-          <p className="text-sm text-brand-900/45">Kapalı tarih yok.</p>
+          <p className="text-sm text-brand-900/70">
+            Kapalı tarih yok — villa tüm günlerde müsait görünüyor.
+          </p>
         ) : (
           <ul className="divide-y divide-sand-100">
             {blocks.map((b) => (
@@ -195,7 +217,7 @@ export default function BlockEditor({
                   <div className="font-semibold text-brand-900">
                     {formatDateShort(b.startsOn)} – {formatDateShort(b.endsOn)}
                   </div>
-                  <div className="text-xs text-brand-900/50">
+                  <div className="text-xs text-brand-900/70">
                     {b.source === "booking"
                       ? "Onaylı rezervasyon"
                       : b.note || "Elle kapatıldı"}
@@ -203,23 +225,25 @@ export default function BlockEditor({
                 </div>
                 {b.source === "booking" ? (
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-900/40">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-900/70">
                       <Lock className="h-3.5 w-3.5" />
                       Rezervasyon
                     </span>
                     <button
-                      onClick={() => cancelBooking(b)}
+                      type="button"
+                      onClick={() => void cancelBooking(b)}
                       disabled={pending}
-                      className="rounded-lg px-2.5 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                      className="rounded-lg px-2.5 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50"
                     >
                       İptal et
                     </button>
                   </div>
                 ) : (
                   <button
-                    onClick={() => open(b.id)}
+                    type="button"
+                    onClick={() => open(b)}
                     disabled={pending}
-                    className="rounded-lg px-2.5 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                    className="rounded-lg px-2.5 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:opacity-50"
                   >
                     Aç
                   </button>

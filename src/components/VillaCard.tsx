@@ -43,9 +43,9 @@ export default function VillaCard({ villa }: { villa: Villa }) {
       <div className="relative aspect-[16/10] overflow-hidden">
         <Image
           src={villa.images[0]}
-          alt={code}
+          alt={villa.name}
           fill
-          sizes="(max-width: 768px) 100vw, 33vw"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           className="object-cover transition duration-500 group-hover:scale-110"
         />
 
@@ -86,15 +86,13 @@ export default function VillaCard({ villa }: { villa: Villa }) {
 
       {/* Gövde */}
       <div className="flex flex-1 flex-col p-4">
-        {/* Kod + konum */}
+        {/* Ad + konum */}
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-xl font-extrabold leading-none tracking-tight text-brand-950">
-              {code}
+          <div className="min-w-0">
+            <div className="truncate text-xl font-extrabold leading-none tracking-tight text-brand-950">
+              {villa.name}
             </div>
-            <div className="mt-1 text-xs text-brand-900/45">
-              {t("card.facilityCode")}
-            </div>
+            <div className="mt-1 text-xs text-brand-900/45">{code}</div>
           </div>
           <div className="text-right">
             <div className="flex items-center justify-end gap-1 font-bold text-brand-900">

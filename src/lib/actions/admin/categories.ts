@@ -10,10 +10,15 @@ import {
   setCategoryVillasSchema,
   type CategoryFormInput,
 } from "@/lib/schemas/adminCategory";
+import { toFieldErrors } from "@/lib/schemas/fieldErrors";
 
 export type CategoryResult =
   | { ok: true; id?: string }
-  | { ok: false; error: "auth" | "validation" | "slug" | "generic" };
+  | {
+      ok: false;
+      error: "auth" | "validation" | "slug" | "generic";
+      fields?: Record<string, string>;
+    };
 
 function toRow(d: CategoryFormInput) {
   return {
@@ -41,7 +46,9 @@ export async function createCategory(input: unknown): Promise<CategoryResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = categoryFormSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
 
   const supabase = await supabaseSession();
   const { data, error } = await supabase
@@ -50,7 +57,13 @@ export async function createCategory(input: unknown): Promise<CategoryResult> {
     .select("id")
     .single();
   if (error) {
-    if (error.code === "23505") return { ok: false, error: "slug" };
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "slug",
+        fields: { slug: "Bu kısa ad başka kategoride kullanılıyor." },
+      };
+    }
     return { ok: false, error: "generic" };
   }
   revalidate(data.id);
@@ -62,7 +75,9 @@ export async function updateCategory(input: unknown): Promise<CategoryResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateCategorySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
   const { id, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
@@ -71,7 +86,13 @@ export async function updateCategory(input: unknown): Promise<CategoryResult> {
     .update(toRow(fields))
     .eq("id", id);
   if (error) {
-    if (error.code === "23505") return { ok: false, error: "slug" };
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "slug",
+        fields: { slug: "Bu kısa ad başka kategoride kullanılıyor." },
+      };
+    }
     return { ok: false, error: "generic" };
   }
   revalidate(id);

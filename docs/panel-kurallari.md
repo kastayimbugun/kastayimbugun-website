@@ -143,9 +143,25 @@ lib/
     admin.ts            # service_role (yalnızca herkese açık form; panel KULLANMAZ)
   data/admin/           # bookings.ts, villas.ts ... (okuma)
   actions/admin/        # bookings.ts, villas.ts ... (yazma, "use server")
-  schemas/              # booking.ts, villa.ts ... (Zod)
-components/admin/        # AdminTable, FormField, StatusBadge, ConfirmDialog, Toast, AdminNav
+  schemas/              # booking.ts, villa.ts ... (Zod) + fieldErrors.ts
+  slugify.ts            # ortak yardımcılar (kopyalanmaz)
+components/admin/
+  ui/                   # tasarım sistemi — ilkeller, özellik bilgisi taşımaz
+    styles.ts           #   input/buton/kart sınıfları, kontrast alt sınırı
+    Toast.tsx           #   ToastProvider + useToast
+    ConfirmDialog.tsx   #   ConfirmProvider + useConfirm (window.confirm YOK)
+    FormField.tsx       #   Field (etiket + zorunluluk + hata) + Section
+    StatusBadge.tsx     #   durum rozeti
+    PageHeader.tsx      #   PageHeader + BackLink + EmptyState
+    SaveBar.tsx         #   yapışkan kaydet çubuğu
+    useUnsavedGuard.ts  #   kaydedilmemiş değişiklik uyarısı
+  *.tsx                 # özellik bileşenleri (VillaForm, ImageManager, …)
 ```
+
+**Kural:** yeni bir input/buton/rozet/onay/bildirim ihtiyacı çıktığında önce
+`components/admin/ui/` içine bakılır. Orada yoksa oraya eklenir — özellik
+bileşeninin içine gömülmez. Toast ve onay diyaloğu sağlayıcıları `AdminShell`
+içinde mount edilir, tüm panel ekranları erişir.
 
 ### İlkeler
 - **Özellik izolasyonu:** Talepler, Villalar, Kategoriler ayrı modüllerdir. Birini

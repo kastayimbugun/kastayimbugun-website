@@ -1,67 +1,110 @@
 import Link from "next/link";
-import { Phone, Mail, ExternalLink } from "lucide-react";
+import { Inbox, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   getBookingRequests,
   getBookingCounts,
+  BOOKINGS_PAGE_SIZE,
+  type BookingFilters,
 } from "@/lib/data/admin/bookings";
+import { getVillaOptions } from "@/lib/data/admin/villas";
 import {
-  bookingStatusSchema,
+  bookingQuerySchema,
   bookingStatusLabel,
   type BookingStatus,
 } from "@/lib/schemas/adminBooking";
-import BookingStatusSelect from "@/components/admin/BookingStatusSelect";
-import { formatDateShort, formatPrice } from "@/lib/format";
+import BookingRow from "@/components/admin/BookingRow";
+import BookingFilterBar from "@/components/admin/BookingFilterBar";
+import { PageHeader, EmptyState } from "@/components/admin/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 
+const BASE = "/yonetim/talepler";
+
+// "Onaylandı" burada yok — onaylanan talep artık Rezervasyonlar sayfasına
+// "geçmiş" gibi görünür (bkz. lib/data/admin/bookings.ts excludeStatus).
 const filters: { key: BookingStatus | "all"; label: string }[] = [
   { key: "all", label: "Tümü" },
   { key: "new", label: bookingStatusLabel.new },
   { key: "contacted", label: bookingStatusLabel.contacted },
-  { key: "confirmed", label: bookingStatusLabel.confirmed },
   { key: "cancelled", label: bookingStatusLabel.cancelled },
 ];
 
 export default async function TaleplerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ durum?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { durum } = await searchParams;
-  const parsed = bookingStatusSchema.safeParse(durum);
-  const active: BookingStatus | undefined = parsed.success
-    ? parsed.data
-    : undefined;
+  const raw = await searchParams;
+  const query = bookingQuerySchema.parse(raw);
 
-  const [rows, counts] = await Promise.all([
-    getBookingRequests(active),
-    getBookingCounts(),
+  // Varsayılan görünüm (durum sekmesi seçilmemiş) "Onaylandı" hariç hepsini
+  // gösterir. Arama yapılırken bu sınır kalkar — eski/onaylı bir müşteriyi
+  // ararken durum engeli olmasın.
+  const filter: BookingFilters = {
+    status: query.durum,
+    excludeStatus: !query.durum && !query.q ? "confirmed" : undefined,
+    q: query.q,
+    villaId: query.villa,
+    from: query.baslangic,
+    to: query.bitis,
+    sort: query.sirala === "giris" ? "checkin" : "new",
+    page: query.sayfa,
+  };
+
+  const [page, counts, villas] = await Promise.all([
+    getBookingRequests(filter),
+    // Rozet sayıları durum dışındaki filtreleri paylaşır → listeyle tutarlı.
+    getBookingCounts({ ...filter, status: undefined, excludeStatus: undefined }),
+    getVillaOptions(),
   ]);
 
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  // "Tümü" rozeti Onaylandı'yı saymaz — o artık Rezervasyonlar'ın alanı.
+  const total = counts.new + counts.contacted + counts.cancelled;
   const countFor = (k: BookingStatus | "all") =>
     k === "all" ? total : (counts[k] ?? 0);
 
+  /** Mevcut filtreleri koruyarak URL üretir. */
+  const hrefWith = (over: Record<string, string | undefined>) => {
+    const merged: Record<string, string | undefined> = {
+      durum: query.durum,
+      q: query.q,
+      villa: query.villa,
+      baslangic: query.baslangic,
+      bitis: query.bitis,
+      sirala: query.sirala,
+      sayfa: query.sayfa ? String(query.sayfa) : undefined,
+      ...over,
+    };
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    const qs = p.toString();
+    return qs ? `${BASE}?${qs}` : BASE;
+  };
+
+  const firstIndex = (page.page - 1) * BOOKINGS_PAGE_SIZE + 1;
+  const lastIndex = firstIndex + page.rows.length - 1;
+
   return (
     <div>
-      <h1 className="text-xl font-extrabold text-brand-950">Talepler</h1>
-      <p className="mt-1 text-sm text-brand-900/55">
-        Rezervasyon talepleri. Onaylayınca tarihler villa takviminde otomatik
-        kapanır.
-      </p>
+      <PageHeader
+        title="Talepler"
+        description="Rezervasyon talepleri. Onaylayınca tarihler villa takviminde otomatik kapanır."
+      />
 
-      {/* Filtre sekmeleri */}
+      {/* Durum sekmeleri — diğer filtreleri koruyarak */}
       <div className="mt-4 flex flex-wrap gap-2">
         {filters.map((f) => {
           const isActive =
-            (f.key === "all" && !active) || f.key === active;
-          const href =
-            f.key === "all" ? "/yonetim/talepler" : `/yonetim/talepler?durum=${f.key}`;
+            (f.key === "all" && !query.durum) || f.key === query.durum;
           return (
             <Link
               key={f.key}
-              href={href}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+              href={hrefWith({
+                durum: f.key === "all" ? undefined : f.key,
+                sayfa: undefined,
+              })}
+              aria-current={isActive ? "page" : undefined}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition focus-visible:ring-2 focus-visible:ring-brand-300 ${
                 isActive
                   ? "bg-brand-600 text-white"
                   : "bg-white text-brand-800 ring-1 ring-sand-200 hover:bg-sand-50"
@@ -70,7 +113,7 @@ export default async function TaleplerPage({
               {f.label}
               <span
                 className={`ml-1.5 text-xs ${
-                  isActive ? "text-white/70" : "text-brand-900/40"
+                  isActive ? "text-white/80" : "text-brand-900/70"
                 }`}
               >
                 {countFor(f.key)}
@@ -80,106 +123,83 @@ export default async function TaleplerPage({
         })}
       </div>
 
-      {/* Liste */}
-      {rows.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-sand-300 bg-white p-10 text-center text-sm text-brand-900/50">
-          Bu filtrede talep yok.
+      <div className="mt-3">
+        <BookingFilterBar villas={villas} />
+      </div>
+
+      {page.rows.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState
+            icon={Inbox}
+            title={
+              total === 0 && !query.q && !query.villa
+                ? "Henüz talep gelmedi"
+                : "Bu filtrede talep yok"
+            }
+            description={
+              total === 0 && !query.q && !query.villa
+                ? "Siteden bir rezervasyon talebi gönderildiğinde burada görünür."
+                : "Arama terimini veya tarih aralığını değiştirin ya da filtreleri temizleyin."
+            }
+          />
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-sand-200 bg-white">
-          <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_1fr_1.2fr_auto] gap-4 border-b border-sand-200 px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-brand-900/40 lg:grid">
-            <span>Villa / Tarih</span>
-            <span>Misafir</span>
-            <span>Tutar</span>
-            <span>İletişim</span>
-            <span>Talep tarihi</span>
-            <span>Durum</span>
+        <>
+          <p className="mt-4 text-sm text-brand-900/70">
+            <span className="font-semibold text-brand-950">{page.total}</span>{" "}
+            talep bulundu · {firstIndex}–{lastIndex} arası gösteriliyor
+          </p>
+
+          <div className="mt-2 overflow-hidden rounded-2xl border border-sand-200 bg-white">
+            <div className="hidden grid-cols-[1.5fr_0.8fr_0.8fr_1.2fr_1fr_auto] gap-4 border-b border-sand-200 px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-brand-900/70 lg:grid">
+              <span>Villa / Tarih</span>
+              <span>Misafir</span>
+              <span>Tutar</span>
+              <span>İletişim</span>
+              <span>Talep tarihi</span>
+              <span>Durum</span>
+            </div>
+
+            <ul className="divide-y divide-sand-100">
+              {page.rows.map((r) => (
+                <BookingRow key={r.id} booking={r} />
+              ))}
+            </ul>
           </div>
 
-          <ul className="divide-y divide-sand-100">
-            {rows.map((r) => (
-              <li
-                key={r.id}
-                className="grid grid-cols-1 gap-3 px-5 py-4 lg:grid-cols-[1.4fr_1fr_0.8fr_1fr_1.2fr_auto] lg:items-center lg:gap-4"
+          {/* Sayfalama */}
+          {page.pageCount > 1 && (
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <Link
+                href={hrefWith({ sayfa: String(page.page - 1) })}
+                aria-disabled={page.page <= 1}
+                className={`inline-flex items-center gap-1 rounded-lg border border-sand-200 bg-white px-3 py-2 text-sm font-semibold transition ${
+                  page.page <= 1
+                    ? "pointer-events-none opacity-40"
+                    : "text-brand-800 hover:bg-sand-50"
+                }`}
               >
-                {/* Villa + tarih */}
-                <div>
-                  {r.villaSlug ? (
-                    <Link
-                      href={`/villa/${r.villaSlug}`}
-                      target="_blank"
-                      className="inline-flex items-center gap-1 font-semibold text-brand-900 hover:text-brand-700"
-                    >
-                      {r.villaName}
-                      <ExternalLink className="h-3 w-3 opacity-50" />
-                    </Link>
-                  ) : (
-                    <span className="font-semibold text-brand-900">
-                      {r.villaName}
-                    </span>
-                  )}
-                  <div className="text-sm text-brand-900/55">
-                    {formatDateShort(r.checkIn)} – {formatDateShort(r.checkOut)}
-                  </div>
-                </div>
-
-                {/* Misafir */}
-                <div className="text-sm text-brand-900/70">
-                  {r.adults + r.children} kişi
-                  {r.babies > 0 && (
-                    <span className="text-brand-900/40"> +{r.babies} bebek</span>
-                  )}
-                </div>
-
-                {/* Tutar */}
-                <div className="text-sm font-semibold text-brand-950">
-                  {r.priceEstimate != null
-                    ? formatPrice(r.priceEstimate)
-                    : "—"}
-                </div>
-
-                {/* İletişim */}
-                <div className="text-sm">
-                  <div className="font-semibold text-brand-900">
-                    {r.fullName}
-                  </div>
-                  <a
-                    href={`tel:${r.phone.replace(/\s/g, "")}`}
-                    className="inline-flex items-center gap-1 text-brand-700 hover:underline"
-                  >
-                    <Phone className="h-3 w-3" />
-                    {r.phone}
-                  </a>
-                  {r.email && (
-                    <a
-                      href={`mailto:${r.email}`}
-                      className="mt-0.5 flex items-center gap-1 text-brand-900/50 hover:underline"
-                    >
-                      <Mail className="h-3 w-3" />
-                      {r.email}
-                    </a>
-                  )}
-                </div>
-
-                {/* Talep tarihi */}
-                <div className="text-sm text-brand-900/55">
-                  {formatDateShort(r.createdAt.slice(0, 10))}
-                </div>
-
-                {/* Durum */}
-                <div className="lg:justify-self-end">
-                  <BookingStatusSelect id={r.id} current={r.status} />
-                </div>
-
-                {r.note && (
-                  <p className="rounded-lg bg-sand-50 px-3 py-2 text-sm text-brand-900/70 lg:col-span-6">
-                    “{r.note}”
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+                <ChevronLeft className="h-4 w-4" />
+                Önceki
+              </Link>
+              <span className="text-sm text-brand-900/70">
+                Sayfa {page.page} / {page.pageCount}
+              </span>
+              <Link
+                href={hrefWith({ sayfa: String(page.page + 1) })}
+                aria-disabled={page.page >= page.pageCount}
+                className={`inline-flex items-center gap-1 rounded-lg border border-sand-200 bg-white px-3 py-2 text-sm font-semibold transition ${
+                  page.page >= page.pageCount
+                    ? "pointer-events-none opacity-40"
+                    : "text-brand-800 hover:bg-sand-50"
+                }`}
+              >
+                Sonraki
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

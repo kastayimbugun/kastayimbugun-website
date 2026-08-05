@@ -41,6 +41,16 @@ html {
   scroll-behavior: smooth;
 }
 
+/*
+ * Klavyeyle gezinirken odak her zaman görünür olsun.
+ * Bileşenlerde `outline-none` + soluk bir `focus:ring` kullanılıyordu;
+ * brand-100 (#fdecce) beyaz üzerinde neredeyse görünmezdi.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

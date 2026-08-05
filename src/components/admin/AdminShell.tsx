@@ -1,32 +1,103 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Inbox,
   CalendarCheck,
   Home,
   MapPin,
   Tags,
+  Settings,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react";
 import { signOutAction } from "@/lib/actions/admin/auth";
+import { ToastProvider } from "@/components/admin/ui/Toast";
+import { ConfirmProvider } from "@/components/admin/ui/ConfirmDialog";
 import type { StaffUser } from "@/lib/auth/staff";
 
 /**
  * Panel kabuğu: sol menü + üst bar + içerik.
- * Aktif olmayan modüller "yakında" olarak gösterilir; ilgili faz gelince linke döner.
+ *
+ * İstemci bileşenidir çünkü (a) aktif sayfa vurgusu `usePathname` ister,
+ * (b) mobil menü açık/kapalı durumu tutar. `children` sunucudan prop olarak
+ * geçtiği için sayfa içerikleri sunucuda render edilmeye devam eder.
+ *
+ * Toast ve onay diyaloğu sağlayıcıları burada — tüm panel ekranları erişir
+ * (docs/panel-kurallari.md §4).
  */
 
 const nav = [
-  { href: "/yonetim", label: "Panel", icon: LayoutDashboard, ready: true },
-  { href: "/yonetim/talepler", label: "Talepler", icon: CalendarCheck, ready: true },
-  { href: "/yonetim/villalar", label: "Villalar", icon: Home, ready: true },
-  { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin, ready: true },
-  { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags, ready: true },
+  { href: "/yonetim", label: "Panel", icon: LayoutDashboard },
+  { href: "/yonetim/talepler", label: "Talepler", icon: Inbox },
+  { href: "/yonetim/rezervasyonlar", label: "Rezervasyonlar", icon: CalendarCheck },
+  { href: "/yonetim/villalar", label: "Villalar", icon: Home },
+  { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin },
+  { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags },
+  { href: "/yonetim/ayarlar", label: "Site ayarları", icon: Settings },
 ];
 
 const roleLabel: Record<StaffUser["role"], string> = {
   admin: "Yönetici",
   editor: "Editör",
 };
+
+/** "/yonetim" yalnızca tam eşleşmede aktif; diğerleri alt yollarını da kapsar. */
+function isActive(pathname: string, href: string) {
+  if (href === "/yonetim") return pathname === "/yonetim";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavLinks({
+  pathname,
+  onNavigate,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav className="flex-1 space-y-1 p-3">
+      {nav.map((item) => {
+        const active = isActive(pathname, item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:ring-2 focus-visible:ring-brand-300 ${
+              active
+                ? "bg-brand-50 text-brand-800"
+                : "text-brand-900 hover:bg-sand-100"
+            }`}
+          >
+            <item.icon
+              className={`h-4 w-4 ${active ? "text-brand-600" : "text-brand-900/60"}`}
+            />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Brand() {
+  return (
+    <div className="border-b border-sand-200 px-5 py-4">
+      <span className="text-sm font-extrabold text-brand-950">
+        Kastayım Bugün
+      </span>
+      <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-wide text-brand-900/70">
+        Yönetim
+      </span>
+    </div>
+  );
+}
 
 export default function AdminShell({
   staff,
@@ -35,71 +106,103 @@ export default function AdminShell({
   staff: StaffUser;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  // Çekmecenin açık olduğu yol tutulur; adres değişince (menüden tıklama,
+  // tarayıcı geri tuşu) karşılaştırma tutmaz ve çekmece kendiliğinden kapanır.
+  // Böylece pathname'i dinleyen bir efekte gerek kalmaz.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const menuOpen = openedAt === pathname;
+
+  // Çekmece açıkken arka plan kaymasın.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
   return (
-    <div className="flex min-h-screen bg-sand-50">
-      {/* Sol menü */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-sand-200 bg-white sm:flex">
-        <div className="border-b border-sand-200 px-5 py-4">
-          <span className="text-sm font-extrabold text-brand-950">
-            Kastayım Bugün
-          </span>
-          <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-wide text-brand-900/40">
-            Yönetim
-          </span>
-        </div>
-        <nav className="flex-1 space-y-1 p-3">
-          {nav.map((item) =>
-            item.ready ? (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-brand-900 transition hover:bg-brand-50"
-              >
-                <item.icon className="h-4 w-4 text-brand-500" />
-                {item.label}
-              </Link>
-            ) : (
-              <span
-                key={item.href}
-                className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-900/35"
-                title="Yakında"
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-                <span className="ml-auto text-[10px] font-bold uppercase text-brand-900/30">
-                  yakında
-                </span>
-              </span>
-            )
+    <ToastProvider>
+      <ConfirmProvider>
+        <div className="flex min-h-screen bg-sand-50 print:block print:bg-white">
+          {/* Sol menü — masaüstü. print:hidden: konfirmasyon gibi yazdırılan
+              sayfalarda gezinme çıktıya karışmasın. */}
+          <aside className="hidden w-60 shrink-0 flex-col border-r border-sand-200 bg-white sm:flex print:hidden">
+            <Brand />
+            <NavLinks pathname={pathname} />
+          </aside>
+
+          {/* Sol menü — mobil çekmece */}
+          {menuOpen && (
+            <div className="fixed inset-0 z-50 sm:hidden">
+              <button
+                type="button"
+                aria-label="Menüyü kapat"
+                onClick={() => setOpenedAt(null)}
+                className="absolute inset-0 bg-brand-950/40"
+              />
+              <div className="relative flex h-full w-64 max-w-[80vw] flex-col bg-white shadow-xl">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <Brand />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenedAt(null)}
+                    aria-label="Menüyü kapat"
+                    className="m-3 rounded-lg p-1.5 text-brand-800 transition hover:bg-sand-100"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <NavLinks
+                  pathname={pathname}
+                  onNavigate={() => setOpenedAt(null)}
+                />
+              </div>
+            </div>
           )}
-        </nav>
-      </aside>
 
-      {/* İçerik */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Üst bar */}
-        <header className="flex items-center justify-between border-b border-sand-200 bg-white px-4 py-3 sm:px-6">
-          <div className="text-sm text-brand-900/60">
-            <span className="font-semibold text-brand-950">
-              {staff.fullName ?? staff.email}
-            </span>
-            <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
-              {roleLabel[staff.role]}
-            </span>
+          {/* İçerik */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="flex items-center gap-2 border-b border-sand-200 bg-white px-3 py-3 sm:px-6 print:hidden">
+              <button
+                type="button"
+                onClick={() => setOpenedAt(pathname)}
+                aria-label="Menüyü aç"
+                aria-expanded={menuOpen}
+                className="rounded-lg p-2 text-brand-800 transition hover:bg-sand-100 focus-visible:ring-2 focus-visible:ring-brand-300 sm:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+
+              <div className="min-w-0 flex-1 truncate text-sm">
+                <span className="font-semibold text-brand-950">
+                  {staff.fullName ?? staff.email}
+                </span>
+                <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-800">
+                  {roleLabel[staff.role]}
+                </span>
+              </div>
+
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-800 transition hover:bg-sand-100 focus-visible:ring-2 focus-visible:ring-brand-300"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Çıkış</span>
+                </button>
+              </form>
+            </header>
+
+            <main className="flex-1 p-4 sm:p-6 print:p-0">{children}</main>
           </div>
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-800 transition hover:bg-sand-100"
-            >
-              <LogOut className="h-4 w-4" />
-              Çıkış
-            </button>
-          </form>
-        </header>
-
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
-      </div>
-    </div>
+        </div>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
