@@ -324,7 +324,13 @@ listesi + durum + onayda otomatik takvim) · 5.2 ✅ (tüm villa alanları düze
 oluşturma) · 5.3 ✅ (sezon fiyatı + görsel takvimle tarih kapatma, dolu gün notu,
 rezervasyon iptali) · 5.4 ✅ (görsel yükleme/sıralama/silme) · 5.5 ✅ (bölge + kategori
 yönetimi, kategoriye villa atama) · Site ayarları ekranı ✅ (Faz 3 ile birlikte).
-Kalan: 5.6 dashboard zenginleştirme (opsiyonel). Panel `main`'de ve canlıda.
+Panel `main`'de ve canlıda.
+
+**Faz 5.6 — panel olgunlaştırma (04.08.2026 denetimi sonrası, artık opsiyonel değil).**
+Panel kod denetimi + sektör araştırması: **[docs/panel-yol-haritasi.md](docs/panel-yol-haritasi.md)**.
+45 bulgu, 5 dalgaya bölünmüş. Dalga 0 (veri kaybettiren 3 hata + mobilde menü olmaması)
+yayın öncesi kapatılmalı. Dalga 0+1 ≈ 2,5 gün, +Dalga 2 (Bugün ekranı, talep notları,
+satış hattı) ≈ 4,5 gün.
 
 **Amaç:** Acente kendi villasını, fiyatını, takvimini kendi girsin; sana bağımlı kalmasın.
 
