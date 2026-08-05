@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getStaffUser } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
@@ -10,22 +9,11 @@ import {
 } from "@/lib/schemas/adminVilla";
 import { processImage } from "@/lib/images/process";
 import { MAX_UPLOAD_BYTES } from "@/lib/images/limits";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateVilla } from "./revalidate";
 
 export type ImageResult =
   | { ok: true }
   | { ok: false; error: "auth" | "validation" | "toobig" | "type" | "generic" };
-
-async function revalidateVilla(supabase: SupabaseClient, villaId: string) {
-  const { data } = await supabase
-    .from("villas")
-    .select("slug")
-    .eq("id", villaId)
-    .maybeSingle();
-  revalidatePath(`/yonetim/villalar/${villaId}`);
-  if (data?.slug) revalidatePath(`/villa/${data.slug}`);
-  revalidatePath("/", "layout");
-}
 
 /** Görsel yükler (Storage) ve villa_images kaydı oluşturur. FormData: villaId, file. */
 export async function uploadImage(formData: FormData): Promise<ImageResult> {

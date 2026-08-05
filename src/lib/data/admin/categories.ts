@@ -24,11 +24,6 @@ export interface AdminCategoryFull {
   villaIds: string[];
 }
 
-export interface VillaPick {
-  id: string;
-  name: string;
-}
-
 export async function getAdminCategories(): Promise<AdminCategoryListItem[]> {
   const supabase = await supabaseSession();
   const { data, error } = await supabase
@@ -87,13 +82,5 @@ export async function getAdminCategory(
   };
 }
 
-/** Kategoriye villa atama listesi için tüm villalar. */
-export async function getVillaPicks(): Promise<VillaPick[]> {
-  const supabase = await supabaseSession();
-  const { data, error } = await supabase
-    .from("villas")
-    .select("id, name")
-    .order("name");
-  if (error) throw new Error(`Villalar okunamadı: ${error.message}`);
-  return data as VillaPick[];
-}
+// Villa seçim listesi için `getVillaOptions` (data/admin/villas.ts) kullanılır —
+// aynı sorgunun iki kopyası tutulmaz.

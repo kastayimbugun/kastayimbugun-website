@@ -1,4 +1,3 @@
-import type { Villa } from "./types";
 import { nightsBetween, toISO } from "./format";
 import { priceForDate } from "./availability";
 
@@ -16,8 +15,26 @@ export interface PriceBreakdown {
   currency: string;
 }
 
+/**
+ * `calcPrice`'ın ihtiyaç duyduğu alanlar — tüm `Villa` şekli değil. Bilerek
+ * `Villa`'dan türetilmedi: `Villa["seasons"]` etiket alanları (labelTr/labelEn)
+ * da taşıyor, fiyat hesabının bunlara ihtiyacı yok. Panel tarafında (manuel
+ * rezervasyon formu) tam `Villa` nesnesi kurmak yerine bu dar tipi dolduran
+ * hafif bir sorgu yeterli olsun diye ayrıldı. Mevcut `Villa` çağrıları
+ * (BookingBox.tsx, actions/booking.ts) fazladan alan taşıdığı için sorunsuz
+ * uyar — TS'te bir değişkenin daha dar bir parametre tipine geçmesi, fazla
+ * alanlar için hata vermez (yalnızca nesne literalleri için "excess property"
+ * kontrolü uygulanır).
+ */
+export interface PricingInput {
+  pricePerNight: number;
+  cleaningFee?: number;
+  serviceRate?: number;
+  seasons: { start: string; end: string; price: number }[];
+}
+
 export function calcPrice(
-  villa: Villa,
+  villa: PricingInput,
   checkIn: string,
   checkOut: string
 ): PriceBreakdown {

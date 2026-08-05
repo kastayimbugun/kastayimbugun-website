@@ -1,25 +1,23 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { getVillaPicks } from "@/lib/data/admin/categories";
+import { getVillaOptions } from "@/lib/data/admin/villas";
 import CategoryForm from "@/components/admin/CategoryForm";
+import { PageHeader, BackLink } from "@/components/admin/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 
 export default async function YeniKategoriPage() {
-  const villas = await getVillaPicks();
+  const villas = await getVillaOptions();
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <Link
-        href="/yonetim/kategoriler"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Kategoriler
-      </Link>
-      <h1 className="mt-3 text-xl font-extrabold text-brand-950">
-        Yeni Kategori
-      </h1>
+    <div className="mx-auto max-w-4xl">
+      <BackLink href="/yonetim/kategoriler">Kategoriler</BackLink>
+
+      <div className="mt-3">
+        <PageHeader
+          title="Yeni Kategori"
+          description="Kategori bilgilerini girin ve hangi villaların bu kategoride görüneceğini seçin."
+        />
+      </div>
+
       <div className="mt-5">
         <CategoryForm category={null} villas={villas} mode="create" />
       </div>

@@ -52,6 +52,21 @@ export const statusOptions: { value: string; label: string }[] = [
   { value: "archived", label: "Arşiv" },
 ];
 
+export type VillaStatusValue = "draft" | "published" | "archived";
+
+/**
+ * Villa durumunun etiketi + rozet tonu. Tek kaynak — daha önce villa listesi
+ * ve villa detay sayfasında birebir kopya `statusMeta` nesnesi vardı.
+ */
+export const villaStatusMeta: Record<
+  VillaStatusValue,
+  { label: string; tone: "success" | "warning" | "neutral" }
+> = {
+  published: { label: "Yayında", tone: "success" },
+  draft: { label: "Taslak", tone: "warning" },
+  archived: { label: "Arşiv", tone: "neutral" },
+};
+
 // Kategori renkleri (site kategori rozetleriyle eşleşir)
 export const categoryColorOptions: { value: string; label: string }[] = [
   { value: "sky", label: "Mavi" },

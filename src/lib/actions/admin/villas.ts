@@ -5,32 +5,23 @@ import { getStaffUser } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   seasonSchema,
+  updateSeasonSchema,
   blockSchema,
   deleteChildSchema,
   villaFormSchema,
   updateVillaSchema,
-  setStatusSchema,
   type VillaFormInput,
 } from "@/lib/schemas/adminVilla";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { toFieldErrors } from "@/lib/schemas/fieldErrors";
+import { revalidateVilla } from "./revalidate";
 
 export type VillaChildResult =
   | { ok: true }
-  | { ok: false; error: "auth" | "validation" | "conflict" | "generic" };
-
-/** Villa slug'ını çekip hem panel detayını hem herkese açık villa sayfasını tazeler. */
-async function revalidateVilla(
-  supabase: SupabaseClient,
-  villaId: string
-) {
-  const { data } = await supabase
-    .from("villas")
-    .select("slug")
-    .eq("id", villaId)
-    .maybeSingle();
-  revalidatePath(`/yonetim/villalar/${villaId}`);
-  if (data?.slug) revalidatePath(`/villa/${data.slug}`);
-}
+  | {
+      ok: false;
+      error: "auth" | "validation" | "conflict" | "generic";
+      fields?: Record<string, string>;
+    };
 
 // ---- Villa temel alanları ----
 
@@ -47,6 +38,11 @@ function toVillaRow(d: VillaFormInput) {
     pool: d.pool,
     size_m2: d.sizeM2,
     distance_to_sea: d.distanceToSea,
+    distance_airport_km: d.distanceAirportKm,
+    distance_market_km: d.distanceMarketKm,
+    distance_restaurant_km: d.distanceRestaurantKm,
+    distance_transit_km: d.distanceTransitKm,
+    distance_center_km: d.distanceCenterKm,
     rating: d.rating,
     review_count: d.reviewCount,
     featured: d.featured,
@@ -67,14 +63,25 @@ function toVillaRow(d: VillaFormInput) {
 
 export type VillaSaveResult =
   | { ok: true; id: string }
-  | { ok: false; error: "auth" | "validation" | "slug" | "generic" };
+  | {
+      ok: false;
+      error: "auth" | "validation" | "slug" | "generic";
+      /** Alan adı → Türkçe hata mesajı; form bunları alan altında gösterir. */
+      fields?: Record<string, string>;
+    };
 
 export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateVillaSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "validation",
+      fields: toFieldErrors(parsed.error),
+    };
+  }
   const { id, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
@@ -84,14 +91,17 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
     .eq("id", id);
 
   if (error) {
-    if (error.code === "23505") return { ok: false, error: "slug" };
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "slug",
+        fields: { slug: "Bu kısa ad başka villada kullanılıyor." },
+      };
+    }
     return { ok: false, error: "generic" };
   }
 
-  revalidatePath("/yonetim/villalar");
-  revalidatePath(`/yonetim/villalar/${id}`);
-  revalidatePath(`/villa/${fields.slug}`);
-  revalidatePath("/", "layout");
+  await revalidateVilla(supabase, id);
   return { ok: true, id };
 }
 
@@ -100,7 +110,13 @@ export async function createVilla(input: unknown): Promise<VillaSaveResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = villaFormSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "validation",
+      fields: toFieldErrors(parsed.error),
+    };
+  }
 
   const supabase = await supabaseSession();
   const { data, error } = await supabase
@@ -110,34 +126,19 @@ export async function createVilla(input: unknown): Promise<VillaSaveResult> {
     .single();
 
   if (error || !data) {
-    if (error?.code === "23505") return { ok: false, error: "slug" };
+    if (error?.code === "23505") {
+      return {
+        ok: false,
+        error: "slug",
+        fields: { slug: "Bu kısa ad başka villada kullanılıyor." },
+      };
+    }
     return { ok: false, error: "generic" };
   }
 
   revalidatePath("/yonetim/villalar");
-  return { ok: true, id: data.id };
-}
-
-export async function setVillaStatus(
-  input: unknown
-): Promise<VillaChildResult> {
-  const staff = await getStaffUser();
-  if (!staff) return { ok: false, error: "auth" };
-
-  const parsed = setStatusSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
-
-  const supabase = await supabaseSession();
-  const { error } = await supabase
-    .from("villas")
-    .update({ status: parsed.data.status })
-    .eq("id", parsed.data.id);
-  if (error) return { ok: false, error: "generic" };
-
-  await revalidateVilla(supabase, parsed.data.id);
-  revalidatePath("/yonetim/villalar");
   revalidatePath("/", "layout");
-  return { ok: true };
+  return { ok: true, id: data.id };
 }
 
 // ---- Sezon fiyatları ----
@@ -147,7 +148,13 @@ export async function addSeason(input: unknown): Promise<VillaChildResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = seasonSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "validation",
+      fields: toFieldErrors(parsed.error),
+    };
+  }
   const d = parsed.data;
 
   const supabase = await supabaseSession();
@@ -159,6 +166,38 @@ export async function addSeason(input: unknown): Promise<VillaChildResult> {
     ends_on: d.endsOn,
     price: d.price,
   });
+  if (error) return { ok: false, error: "generic" };
+
+  await revalidateVilla(supabase, d.villaId);
+  return { ok: true };
+}
+
+export async function updateSeason(input: unknown): Promise<VillaChildResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = updateSeasonSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "validation",
+      fields: toFieldErrors(parsed.error),
+    };
+  }
+  const d = parsed.data;
+
+  const supabase = await supabaseSession();
+  const { error } = await supabase
+    .from("villa_seasons")
+    .update({
+      label_tr: d.labelTr,
+      label_en: d.labelEn,
+      starts_on: d.startsOn,
+      ends_on: d.endsOn,
+      price: d.price,
+    })
+    .eq("id", d.id)
+    .eq("villa_id", d.villaId);
   if (error) return { ok: false, error: "generic" };
 
   await revalidateVilla(supabase, d.villaId);
@@ -191,7 +230,13 @@ export async function addBlock(input: unknown): Promise<VillaChildResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = blockSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "validation",
+      fields: toFieldErrors(parsed.error),
+    };
+  }
   const d = parsed.data;
 
   const supabase = await supabaseSession();

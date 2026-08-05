@@ -10,11 +10,16 @@ import {
   regionIdSchema,
   type RegionFormInput,
 } from "@/lib/schemas/adminRegion";
+import { toFieldErrors } from "@/lib/schemas/fieldErrors";
 import { storeImage, removeImage } from "@/lib/images/store";
 
 export type RegionResult =
   | { ok: true; id?: string }
-  | { ok: false; error: "auth" | "validation" | "slug" | "inuse" | "generic" };
+  | {
+      ok: false;
+      error: "auth" | "validation" | "slug" | "inuse" | "generic";
+      fields?: Record<string, string>;
+    };
 
 export type RegionImageResult =
   | { ok: true }
@@ -39,7 +44,9 @@ export async function createRegion(input: unknown): Promise<RegionResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = regionFormSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
 
   const supabase = await supabaseSession();
   const { data, error } = await supabase
@@ -48,7 +55,13 @@ export async function createRegion(input: unknown): Promise<RegionResult> {
     .select("id")
     .single();
   if (error) {
-    if (error.code === "23505") return { ok: false, error: "slug" };
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "slug",
+        fields: { slug: "Bu kısa ad başka bölgede kullanılıyor." },
+      };
+    }
     return { ok: false, error: "generic" };
   }
   revalidate();
@@ -60,7 +73,9 @@ export async function updateRegion(input: unknown): Promise<RegionResult> {
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateRegionSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
   const { id, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
@@ -69,7 +84,13 @@ export async function updateRegion(input: unknown): Promise<RegionResult> {
     .update(toRow(fields))
     .eq("id", id);
   if (error) {
-    if (error.code === "23505") return { ok: false, error: "slug" };
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "slug",
+        fields: { slug: "Bu kısa ad başka bölgede kullanılıyor." },
+      };
+    }
     return { ok: false, error: "generic" };
   }
   revalidate();
