@@ -27,6 +27,14 @@ interface Props {
    * YALNIZCA panelde geçilir — herkese açık sitede geçilmez (gizlilik).
    */
   getBookedNote?: (iso: string) => string | null;
+  /**
+   * Elle kapatılmış tarih aralıkları. `bookedRanges`'ten ayrı: bunlar kilitli
+   * DEĞİL — mavi görünür ve aralık seçimine (onDayClick) dahildir, böylece
+   * birkaç kapalı gün seçilip toplu açılabilir.
+   * YALNIZCA panelde (BlockEditor) geçilir; herkese açık sitede boş kalır, o
+   * yüzden tüm bloklar `bookedRanges` üzerinden kilitli görünmeye devam eder.
+   */
+  closedRanges?: Range[];
 }
 
 export default function AvailabilityCalendar({
@@ -38,6 +46,7 @@ export default function AvailabilityCalendar({
   seasons = [],
   discountPercent,
   getBookedNote,
+  closedRanges = [],
 }: Props) {
   const { lang } = useI18n();
   const today = new Date();
@@ -63,6 +72,15 @@ export default function AvailabilityCalendar({
     { cls: "bg-white ring-1 ring-sand-200", label: lang === "tr" ? "Müsait" : "Available" },
     { cls: "bg-brand-600", label: lang === "tr" ? "Seçili" : "Selected" },
     { cls: "bg-rose-100 ring-1 ring-rose-200", label: lang === "tr" ? "Dolu" : "Booked" },
+    // "Kapalı" göstergesi yalnızca elle kapatma aralığı geçildiğinde (panelde).
+    ...(closedRanges.length > 0
+      ? [
+          {
+            cls: "bg-brand-100 ring-1 ring-brand-300",
+            label: lang === "tr" ? "Kapalı (seç-aç)" : "Closed",
+          },
+        ]
+      : []),
   ];
 
   const renderMonth = (offset: number) => {
@@ -85,6 +103,9 @@ export default function AvailabilityCalendar({
             const iso = toISO(day);
             const past = isPast(iso);
             const booked = isBooked(iso, bookedRanges);
+            // Elle kapatılmış gün: kilitli DEĞİL — aralık seçimine dahil,
+            // seçilip toplu açılabilir (onDayClick üzerinden).
+            const closed = isBooked(iso, closedRanges);
             const disabled = past || booked;
 
             const isStart = iso === checkIn;
@@ -93,9 +114,10 @@ export default function AvailabilityCalendar({
               checkIn && checkOut && iso > checkIn && iso < checkOut;
             const selected = isStart || isEnd;
 
-            const bookedNote = booked ? getBookedNote?.(iso) ?? null : null;
+            const bookedNote =
+              booked || closed ? getBookedNote?.(iso) ?? null : null;
             const base = priceForDate(iso, seasons);
-            const showPrice = base != null && !disabled;
+            const showPrice = base != null && !disabled && !closed;
             const hasDiscount = showPrice && !!discountPercent;
             const discounted = hasDiscount
               ? Math.round(base! * (1 - discountPercent! / 100))
@@ -104,16 +126,22 @@ export default function AvailabilityCalendar({
             let cls =
               "text-brand-900 hover:bg-brand-50 hover:ring-1 hover:ring-brand-300";
             let priceCls = "text-brand-900/45";
-            if (booked) {
-              cls = "bg-rose-50 text-rose-300 line-through cursor-not-allowed";
-            } else if (past) {
-              cls = "text-brand-900/25 cursor-not-allowed";
-            } else if (selected) {
+            // Seçim vurgusu her şeyin üstünde: seçili/aralık içi kapalı günü de
+            // sarmalar, böylece "seç → aç" görsel geri bildirimi net olur.
+            if (selected) {
               cls = "bg-brand-600 text-white font-bold";
               priceCls = "text-white/80";
             } else if (inRange) {
-              cls = "bg-brand-100 text-brand-800";
+              cls = "bg-brand-200 text-brand-800";
               priceCls = "text-brand-700/70";
+            } else if (closed) {
+              // Elle kapatma: mavi ton, üstü çizili değil, seçilebilir.
+              cls =
+                "bg-brand-100 text-brand-700 ring-1 ring-brand-300 hover:bg-brand-200 cursor-pointer";
+            } else if (booked) {
+              cls = "bg-rose-50 text-rose-300 line-through cursor-not-allowed";
+            } else if (past) {
+              cls = "text-brand-900/25 cursor-not-allowed";
             }
 
             return (
@@ -121,13 +149,20 @@ export default function AvailabilityCalendar({
                 key={i}
                 disabled={disabled}
                 onClick={() => onDayClick(iso)}
-                title={bookedNote ?? undefined}
-                className={`relative flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-sm transition ${
-                  bookedNote ? "cursor-help" : ""
-                } ${cls}`}
+                title={
+                  closed
+                    ? (bookedNote ? bookedNote + " · " : "") +
+                      (lang === "tr" ? "Seçip açabilirsiniz" : "Select to reopen")
+                    : (bookedNote ?? undefined)
+                }
+                className={`relative flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-sm transition ${cls}`}
               >
                 {bookedNote && (
-                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-rose-400" />
+                  <span
+                    className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${
+                      closed ? "bg-brand-500" : "bg-rose-400"
+                    }`}
+                  />
                 )}
                 <span className="leading-none">{day.getDate()}</span>
                 {showPrice &&
