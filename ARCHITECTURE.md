@@ -89,6 +89,9 @@ Bunlar tartışmaya kapalı; bir PR bu maddelerden birini ihlal ediyorsa geri ç
 
 - **Kod İngilizce** (değişken, fonksiyon, dosya). **Kullanıcıya görünen metin** asla koda
   gömülmez → `src/lib/i18n.tsx` sözlüğüne anahtar olarak eklenir (TR + EN, ikisi de dolu).
+  - **İstisna — e-posta şablonları.** `i18n.tsx` bir `"use client"` React context'idir,
+    sunucudan çağrılamaz. Bu yüzden e-posta gövdelerinin metinleri kendi dosyalarında,
+    aynı TR+EN sözlük biçiminde tutulur (`src/lib/email/**`). Arayüz metni buraya yazılmaz.
 - Bileşen dosyaları `PascalCase.tsx`, yardımcılar `camelCase.ts`.
 - Yorumlar Türkçe olabilir (ekip Türkçe); niyeti açıklar, kodu tekrar etmez.
 

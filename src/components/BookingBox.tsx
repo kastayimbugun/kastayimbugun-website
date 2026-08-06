@@ -100,6 +100,7 @@ export default function BookingBox({
         phone,
         email,
         note,
+        lang,
       });
       if (res.ok) {
         router.push("/rezervasyon-talebi/tesekkurler");

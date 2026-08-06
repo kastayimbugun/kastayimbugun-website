@@ -1,11 +1,14 @@
 "use server";
 
+import { after } from "next/server";
+
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getVilla } from "@/lib/data/villas";
 import { bookingRequestSchema } from "@/lib/schemas/booking";
 import { calcPrice } from "@/lib/pricing";
 import { rangeHasConflict } from "@/lib/availability";
 import { toISO, nightsBetween } from "@/lib/format";
+import { notifyBookingRequest } from "@/lib/email/bookingNotifications";
 
 /**
  * Rezervasyon talebi oluşturma — herkese açık formun tek giriş noktası.
@@ -96,7 +99,28 @@ export async function createBookingRequest(
     return { ok: false, error: "generic" };
   }
 
-  // TODO (Faz 4 sonrası): Resend ile acenteye e-posta, hız sınırı (Upstash).
+  // 7) Bildirimler — yanıtı bloklamaz (`after`, yanıt gönderildikten sonra çalışır).
+  // Talep zaten kaydedildi; e-posta gitmese de sonucu değiştirmez.
+  // TODO (Faz 4 sonrası): gerçek hız sınırı (Upstash).
+  after(async () => {
+    await notifyBookingRequest({
+      villaName: villa.name,
+      villaCode: villa.code,
+      checkIn: data.checkIn,
+      checkOut: data.checkOut,
+      nights,
+      adults: data.adults,
+      children: data.children,
+      babies: data.babies,
+      fullName: data.fullName,
+      phone: data.phone,
+      email: data.email || undefined,
+      note: data.note || undefined,
+      total: price.total,
+      lang: data.lang ?? "tr",
+    });
+  });
+
   return { ok: true, total: price.total };
 }
 
