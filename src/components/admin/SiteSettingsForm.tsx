@@ -324,6 +324,7 @@ export default function SiteSettingsForm({
       }}
     >
       <Tabs
+        paramKey="sekme"
         tabs={[
           { id: "brand", label: "Marka", content: brandTab },
           { id: "home", label: "Ana sayfa", content: homeTab },

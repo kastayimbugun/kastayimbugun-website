@@ -69,6 +69,7 @@ export default async function VillaDetayPage({
 
       <div className="mt-5">
         <Tabs
+          paramKey="sekme"
           tabs={[
             {
               id: "info",

@@ -33,6 +33,24 @@ export function formatDateShort(iso: string, lang: Lang = "tr") {
 }
 
 /**
+ * Kısa ama YILLI tarih aralığı, ör. "3 – 8 Ağu 2026", "28 Ağu – 3 Eyl 2026".
+ * Panelde giriş-çıkış gösteriminde yıl şart: farklı yılların (2026/2027)
+ * talepleri ayırt edilebilsin (yol haritası 4.4).
+ */
+export function formatDateRange(startIso: string, endIso: string, lang: Lang = "tr") {
+  const locale = lang === "tr" ? "tr-TR" : "en-US";
+  const a = new Date(startIso + "T00:00:00");
+  const b = new Date(endIso + "T00:00:00");
+  const yearB = new Intl.DateTimeFormat(locale, { year: "numeric" }).format(b);
+
+  // Aynı yıl: yılı yalnızca sonda göster. Farklı yıl: ikisini de tam yaz.
+  if (a.getFullYear() !== b.getFullYear()) {
+    return `${formatDate(startIso, lang)} – ${formatDate(endIso, lang)}`;
+  }
+  return `${formatDateShort(startIso, lang)} – ${formatDateShort(endIso, lang)} ${yearB}`;
+}
+
+/**
  * Tam zaman damgası, ör. "3 Ağu 2026 14:20".
  *
  * Saat dilimi bilerek Europe/Istanbul'a sabitlenir: sayfa sunucuda render
