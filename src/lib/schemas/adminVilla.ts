@@ -159,6 +159,16 @@ export const reorderImageSchema = z.object({
   direction: z.enum(["up", "down"]),
 });
 
+/**
+ * Tüm görsel sırasını tek seferde yaz (sürükle-bırak ve "kapak yap").
+ * orderedIds[0] kapak olur. Tek tek takas yerine tam sıra: 12. fotoğrafı
+ * kapak yapmak 11 gidiş-dönüş yerine tek yazma (yol haritası 4.2).
+ */
+export const reorderImagesSchema = z.object({
+  villaId: z.uuid(),
+  orderedIds: z.array(z.uuid()).min(1).max(60),
+});
+
 /** Bir tarih aralığındaki onaylı rezervasyonu iptal edip tarihleri açma. */
 export const cancelReservationSchema = z.object({
   villaId: z.uuid(),

@@ -2,11 +2,21 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Trash2, ArrowUp, ArrowDown, Loader2, Images } from "lucide-react";
+import {
+  Upload,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Star,
+  GripVertical,
+  Loader2,
+  Images,
+} from "lucide-react";
 import {
   uploadImage,
   deleteImage,
   reorderImage,
+  reorderImages,
   updateImageAlt,
   type ImageResult,
 } from "@/lib/actions/admin/images";
@@ -47,6 +57,42 @@ export default function ImageManager({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(
     null
   );
+  // Sürükle-bırak: taşınan görselin id'si + dosya sürükleme vurgusu.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [fileDragOver, setFileDragOver] = useState(false);
+
+  /** İstemcide sıralı id listesini sunucuya yazar (sürükle-bırak / kapak yap). */
+  const persistOrder = (orderedIds: string[]) => {
+    start(async () => {
+      const res = await reorderImages({ villaId, orderedIds });
+      if (!res.ok) toast.error(errorText(res));
+      router.refresh();
+    });
+  };
+
+  /** Bir görseli en başa alıp kapak yapar — tek yazma. */
+  const makeCover = (img: AdminImage) => {
+    const ordered = [img.id, ...images.filter((x) => x.id !== img.id).map((x) => x.id)];
+    persistOrder(ordered);
+  };
+
+  /** Sürüklenen görseli hedef görselin konumuna taşır. */
+  const onDropReorder = (targetId: string) => {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      return;
+    }
+    const ids = images.map((x) => x.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) {
+      setDragId(null);
+      return;
+    }
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    setDragId(null);
+    persistOrder(ids);
+  };
 
   const onFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -171,11 +217,24 @@ export default function ImageManager({
         />
       ) : (
         <>
+          <p className="mb-2 text-xs text-brand-900/60">
+            Sürükleyerek sıralayın. İlk görsel kapak olur; başka bir görseli
+            kapak yapmak için ★ düğmesine basın.
+          </p>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {images.map((img, i) => (
               <li
                 key={img.id}
-                className="overflow-hidden rounded-xl border border-sand-200 bg-white"
+                draggable={!pending}
+                onDragStart={() => setDragId(img.id)}
+                onDragEnd={() => setDragId(null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => onDropReorder(img.id)}
+                className={`overflow-hidden rounded-xl border bg-white transition ${
+                  dragId === img.id
+                    ? "border-brand-500 opacity-50"
+                    : "border-sand-200"
+                }`}
               >
                 <div className="relative aspect-[4/3] bg-sand-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -183,11 +242,27 @@ export default function ImageManager({
                     src={img.url}
                     alt={img.altTr ?? ""}
                     className="h-full w-full object-cover"
+                    draggable={false}
                   />
-                  {i === 0 && (
-                    <span className="absolute left-2 top-2 rounded bg-brand-950/80 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {/* Sürükleme tutamacı — sıralamanın sürüklenebilir olduğunu belli eder */}
+                  <span className="absolute right-2 top-2 rounded bg-brand-950/50 p-1 text-white">
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </span>
+                  {i === 0 ? (
+                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-brand-950/80 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      <Star className="h-3 w-3 fill-current" />
                       Kapak
                     </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => makeCover(img)}
+                      disabled={pending}
+                      className="absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-brand-800 shadow-sm transition hover:bg-white disabled:opacity-50"
+                    >
+                      <Star className="h-3 w-3" />
+                      Kapak yap
+                    </button>
                   )}
                   {busyId === img.id && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/60">
@@ -209,6 +284,8 @@ export default function ImageManager({
                     />
                   </label>
                   <div className="flex items-center justify-between">
+                    {/* Ok tuşları klavye/erişilebilirlik için kalıyor (sürükle-bırak
+                        fare gerektiriyor) */}
                     <div className="flex gap-1">
                       <button
                         type="button"
@@ -244,7 +321,33 @@ export default function ImageManager({
             ))}
           </ul>
 
-          <div className="mt-4">{uploadButton}</div>
+          {/* Dosya sürükle-bırak bölgesi + tıkla-yükle */}
+          <div
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes("Files")) {
+                e.preventDefault();
+                setFileDragOver(true);
+              }
+            }}
+            onDragLeave={() => setFileDragOver(false)}
+            onDrop={(e) => {
+              if (e.dataTransfer.files?.length) {
+                e.preventDefault();
+                setFileDragOver(false);
+                onFiles(e.dataTransfer.files);
+              }
+            }}
+            className={`mt-4 flex flex-col items-center gap-2 rounded-xl border-2 border-dashed p-5 text-center transition ${
+              fileDragOver
+                ? "border-brand-500 bg-brand-50"
+                : "border-sand-300"
+            }`}
+          >
+            <p className="text-sm text-brand-900/70">
+              Fotoğrafları buraya sürükleyin ya da
+            </p>
+            {uploadButton}
+          </div>
         </>
       )}
     </div>
