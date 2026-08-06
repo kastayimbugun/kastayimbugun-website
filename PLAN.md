@@ -350,22 +350,33 @@ panel bundan sonra "eksik madde" listesi taşımayacak. Gerekçe: villalar panel
 önce formun veri ezen hatası ve kalite skoru hazır olmalı; sezon/takvim işleri de villa
 sayısı artmadan yazılırsa ucuz.
 
-Sıra bağımlılığa göre — şema önce, sonra hatalar, sonra ekranlar:
+**Durum: ✅ TAMAM (06.08.2026).** 12 kalemin tamamı kapandı; ek olarak yol haritasında
+olmayan üç istek de bu fazda karşılandı (aşağıda ⭐).
 
-| # | İş | Yol haritası |
-|---|---|---|
-| 1 | `booking_notes` tablosu + `quoted`/`lost` durumları + `lost_reason` + `first_response_at` | şema §4 |
-| 2 | Villa formundaki **bayat veri** hatası + eşzamanlı düzenleme kararının belgelenmesi | 3.4 |
-| 3 | Villalar listesi: arama/filtre/sayfalama + **arşiv ayrımı** + verimsiz sayımlar | 3.1 kalanı |
-| 4 | Talep notları + takip tarihi (talep detay sayfası) | 2.2 |
-| 5 | Satış hattı durumları + zorunlu kayıp sebebi | 2.3 |
-| 6 | Yanıt süresi ölçümü (dashboard ortalaması) | 2.4 |
-| 7 | Multi-calendar — gap night'ları görmek | 3.2 |
-| 8 | Tarih aralığı + çoklu villa toplu güncelleme | 3.3 |
-| 9 | Villa içerik kalite skoru | 4.1 |
-| 10 | Fotoğraf yönetimi: "kapak yap", sürükle-bırak, dosya başına ilerleme | 4.2 |
-| 11 | Fiyat kuralları: hafta sonu / uzun konaklama / son dakika / kapasite üstü | 4.3 |
-| 12 | Kalanlar: giriş kaba kuvvet koruması, sekme URL'de, tarih biçimi, form gezinmesi | 4.4 |
+| # | İş | Yol haritası | Durum |
+|---|---|---|---|
+| 1 | `booking_notes` tablosu + `quoted`/`lost` durumları + `lost_reason` + `first_response_at` | şema §4 | ✅ `0006` |
+| 2 | Villa formundaki **bayat veri** hatası + eşzamanlı düzenleme kararının belgelenmesi | 3.4 | ✅ |
+| 3 | Villalar listesi: arama/filtre/sayfalama + **arşiv ayrımı** + verimsiz sayımlar | 3.1 kalanı | ✅ |
+| 4 | Talep notları + takip tarihi (talep detay sayfası) | 2.2 | ✅ |
+| 5 | Satış hattı durumları + zorunlu kayıp sebebi | 2.3 | ✅ |
+| 6 | Yanıt süresi ölçümü (dashboard ortalaması) | 2.4 | ✅ |
+| 7 | Multi-calendar — gap night'ları görmek | 3.2 | ✅ `/yonetim/takvim` |
+| 8 | Tarih aralığı + çoklu villa toplu güncelleme | 3.3 | ✅ `/yonetim/takvim/toplu` |
+| 9 | Villa içerik kalite skoru | 4.1 | ✅ |
+| 10 | Fotoğraf yönetimi: "kapak yap", sürükle-bırak, dosya başına ilerleme | 4.2 | ✅ |
+| 11 | Fiyat kuralları: hafta sonu / uzun konaklama / son dakika / kapasite üstü | 4.3 | ✅ `0008` |
+| 12 | Kalanlar: giriş kaba kuvvet koruması, sekme URL'de, tarih biçimi | 4.4 | ✅ |
+| ⭐ | Site ayarları: marka/logo/iletişim/SEO/belge metinleri panelden | — | ✅ `0007` |
+| ⭐ | Villa kartında fotoğraf galerisi (ok + nokta, ilk 5 görsel) | — | ✅ |
+| ⭐ | Changeover: giriş/çıkış günü köşegen yarım gün gösterimi | — | ✅ |
+
+> **Changeover notu:** "O gün çıkanın yerine giriş yapılabilir" mantığı veri modelinde
+> zaten vardı (`villa_blocks` yarı-açık `[start, end)`); eksik olan görseldi. Çıkış günü
+> yeni girişe açık ve seçilebilir, giriş günü kilitli.
+
+**Migration'lar:** `0006_booking_pipeline` · `0007_site_settings_extended` ·
+`0008_price_rules` — ilk ikisi uygulandı, **`0008` production Supabase'de çalıştırılmalı.**
 
 **Kapsam dışı — bilinçli:** kanal yöneticisi/OTA senkronu, otomasyon kural motoru, dinamik
 fiyatlandırma, muhasebe modülü, analitik panosu, rol yönetimi ekranı, birleşik gelen kutusu.
