@@ -59,6 +59,13 @@ export default function HomeClient({
     [...featured, ...villas].find((v) => v.images[0])?.images[0] ?? null;
   const heroImage = site.heroImage ?? showcaseImage;
 
+  // Panelden girilen hero metni varsa sözlüktekinin yerine geçer; alt başlık
+  // yalnızca doldurulduğunda görünür (varsayılan tasarımda yok).
+  const heroTitle =
+    (lang === "tr" ? site.heroTitleTr : site.heroTitleEn) ?? t("hero.title");
+  const heroSubtitle =
+    lang === "tr" ? site.heroSubtitleTr : site.heroSubtitleEn;
+
   return (
     <div>
       {/* HERO */}
@@ -68,8 +75,13 @@ export default function HomeClient({
         <div className="relative mx-auto max-w-7xl px-4 pb-8 pt-16 sm:px-6 sm:pt-20">
           <div className="animate-fade-up text-center">
             <h1 className="title-gradient mx-auto max-w-4xl text-4xl font-extrabold leading-tight sm:text-5xl md:text-[3.5rem]">
-              {t("hero.title")}
+              {heroTitle}
             </h1>
+            {heroSubtitle && (
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-brand-900/80 sm:text-lg">
+                {heroSubtitle}
+              </p>
+            )}
           </div>
 
           <div className="mt-8 animate-fade-up">
