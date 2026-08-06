@@ -121,7 +121,29 @@ export const villaFormSchema = z.object({
 export type VillaFormInput = z.infer<typeof villaFormSchema>;
 
 /** Düzenleme: forma id eklenir. */
-export const updateVillaSchema = villaFormSchema.extend({ id: z.uuid() });
+export const updateVillaSchema = villaFormSchema.extend({
+  id: z.uuid(),
+  /**
+   * Formun açıldığı andaki `updated_at`. Sunucu bunu WHERE'e koyar: satır o
+   * sırada başkası tarafından değiştirilmişse güncelleme eşleşmez ve reddedilir.
+   * Opsiyonel — göndermeyen eski istemciyi kırmamak için (kontrol atlanır).
+   */
+  updatedAt: z.string().optional(),
+});
+
+/**
+ * Villa listesi URL parametreleri. Bozuk değer sorguyu patlatmasın diye her
+ * alan `.catch(undefined)` ile yutulur (talepler listesiyle aynı desen).
+ */
+export const villaQuerySchema = z.object({
+  durum: z.enum(["draft", "published", "archived"]).optional().catch(undefined),
+  q: z.string().trim().max(60).optional().catch(undefined),
+  bolge: z.uuid().optional().catch(undefined),
+  sirala: z.enum(["ad", "fiyat", "yeni"]).optional().catch(undefined),
+  sayfa: z.coerce.number().int().min(1).max(9999).optional().catch(undefined),
+});
+
+export type VillaQuery = z.infer<typeof villaQuerySchema>;
 
 /** Görsel alt metni güncelleme. */
 export const imageAltSchema = z.object({

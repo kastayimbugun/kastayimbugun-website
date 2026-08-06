@@ -89,6 +89,16 @@ Panelde müşteri **PII'si** (telefon, e-posta, ad) var. Sızıntı yüzeyini s�
 - **Eşzamanlı düzenleme:** iki editör aynı villayı düzenlerse son yazan kazanır ve veri
   kaybolabilir → `updated_at` kontrolü ile "bu kayıt değişti" uyarısı (veya küçük ekipte
   bilinçli kabul; kararı belgele).
+  > **Karar (05.08.2026) — villa formunda kontrol uygulandı.** Form açılışta okuduğu
+  > `updated_at`'i kaydederken geri gönderir; `updateVilla` bunu `WHERE`'e koyar. Satır o
+  > sırada başkası tarafından değiştirilmişse güncelleme hiçbir satırla eşleşmez, yazma
+  > sessizce kaybolmak yerine "başka bir yerden kaydedilmiş" uyarısıyla reddedilir.
+  > Aynı kapsamda: sekmeler `hidden` ile ayakta tutulduğundan form bileşeni unmount olmuyor
+  > ve tazelenen veriyi almıyordu — kullanıcı hiçbir alana dokunmadıysa artık kendiliğinden
+  > alıyor, dokunduysa yazdıkları korunuyor.
+  > Kategori/sezon/site ayarları formlarında **bilinçli olarak uygulanmadı**: tek editörle
+  > çakışma olasılığı düşük, kayıp da villa kaydı kadar pahalı değil. Ekip büyürse aynı desen
+  > oraya taşınır.
 - **Yıkıcı işlemlerde onay:** arşivleme, görsel silme, talep iptali → açık "emin misiniz?" adımı.
 - **Çift gönderim koruması:** form gönderilirken buton kilitlenir (pending durumu).
 - **Yedekler:** canlıya gerçek veriyle çıkınca Supabase Pro günlük yedek (+ mümkünse PITR) — Faz 7.

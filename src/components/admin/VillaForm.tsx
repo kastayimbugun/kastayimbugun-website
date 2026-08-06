@@ -110,6 +110,25 @@ export default function VillaForm({
     () => JSON.stringify(f) !== JSON.stringify(saved),
     [f, saved]
   );
+
+  /**
+   * Sekmeler `hidden` ile ayakta tutulduğu için (Tabs.tsx) bu bileşen hiç
+   * unmount olmuyor: "Görseller" sekmesinde yapılan bir işlem `router.refresh()`
+   * çağırınca sunucudan yeni `villa` gelir ama `useState` başlatıcısı bir daha
+   * çalışmaz — form bayat veri göstermeye devam ederdi.
+   *
+   * Kullanıcı henüz bir alana dokunmadıysa sessizce tazeleriz. Dokunduysa
+   * yazdıklarını silmek doğru olmaz; o durumda kaydetmedeki `updated_at`
+   * kontrolü devreye girip ezmeyi engelliyor.
+   */
+  const [version, setVersion] = useState(villa?.updatedAt ?? null);
+  if (villa && villa.updatedAt !== version && !dirty) {
+    const fresh = fromVilla(villa);
+    setVersion(villa.updatedAt);
+    setSaved(fresh);
+    setF(fresh);
+  }
+
   useUnsavedGuard(dirty);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
@@ -143,7 +162,11 @@ export default function VillaForm({
       const payload = { ...f };
       const res =
         mode === "edit" && villa
-          ? await updateVilla({ id: villa.id, ...payload })
+          ? await updateVilla({
+              id: villa.id,
+              updatedAt: villa.updatedAt,
+              ...payload,
+            })
           : await createVilla(payload);
 
       if (res.ok) {
@@ -166,7 +189,9 @@ export default function VillaForm({
         toast.error(
           res.error === "auth"
             ? "Oturumunuz sona ermiş. Yeniden giriş yapın."
-            : "Kaydedilemedi."
+            : res.error === "conflict"
+              ? "Bu villa siz düzenlerken başka bir yerden kaydedilmiş. Değişiklikleriniz yazılmadı — sayfayı yenileyip tekrar uygulayın."
+              : "Kaydedilemedi."
         );
       }
     });

@@ -65,7 +65,7 @@ export type VillaSaveResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      error: "auth" | "validation" | "slug" | "generic";
+      error: "auth" | "validation" | "slug" | "generic" | "conflict";
       /** Alan adı → Türkçe hata mesajı; form bunları alan altında gösterir. */
       fields?: Record<string, string>;
     };
@@ -82,13 +82,16 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
       fields: toFieldErrors(parsed.error),
     };
   }
-  const { id, ...fields } = parsed.data;
+  const { id, updatedAt, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
-  const { error } = await supabase
-    .from("villas")
-    .update(toVillaRow(fields))
-    .eq("id", id);
+
+  // Eşzamanlı düzenleme koruması (docs/panel-kurallari.md §3): form açıldıktan
+  // sonra satır değiştiyse WHERE eşleşmez, kimse kimsenin işini sessizce ezmez.
+  let query = supabase.from("villas").update(toVillaRow(fields)).eq("id", id);
+  if (updatedAt) query = query.eq("updated_at", updatedAt);
+
+  const { data: saved, error } = await query.select("id").maybeSingle();
 
   if (error) {
     if (error.code === "23505") {
@@ -100,6 +103,10 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
     }
     return { ok: false, error: "generic" };
   }
+
+  // Hata yok ama satır dönmediyse: kayıt ya silinmiş ya da araya başka bir
+  // kaydetme girmiş. İkisinde de kullanıcıya söylemek gerekir.
+  if (!saved) return { ok: false, error: "conflict" };
 
   await revalidateVilla(supabase, id);
   return { ok: true, id };

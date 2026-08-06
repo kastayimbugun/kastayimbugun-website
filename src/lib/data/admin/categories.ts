@@ -26,9 +26,13 @@ export interface AdminCategoryFull {
 
 export async function getAdminCategories(): Promise<AdminCategoryListItem[]> {
   const supabase = await supabaseSession();
+  // `villa_categories(count)`: ilişkili satırların gövdesi taşınmadan sayılır.
+  // Önceki sürüm her kategori için tüm villa_id listesini çekip JS'te
+  // uzunluğuna bakıyordu — ilişki büyüdükçe boşuna veri, üstelik PostgREST'in
+  // satır sınırına dayanınca sayı sessizce yanlış olurdu.
   const { data, error } = await supabase
     .from("categories")
-    .select("id, slug, name_tr, color, featured_on_home, villa_categories(villa_id)")
+    .select("id, slug, name_tr, color, featured_on_home, villa_categories(count)")
     .order("sort_order");
   if (error) throw new Error(`Kategoriler okunamadı: ${error.message}`);
 
@@ -38,14 +42,14 @@ export async function getAdminCategories(): Promise<AdminCategoryListItem[]> {
     name_tr: string;
     color: string | null;
     featured_on_home: boolean;
-    villa_categories: { villa_id: string }[];
+    villa_categories: { count: number }[];
   }>).map((c) => ({
     id: c.id,
     slug: c.slug,
     nameTr: c.name_tr,
     color: c.color,
     featuredOnHome: c.featured_on_home,
-    villaCount: c.villa_categories?.length ?? 0,
+    villaCount: c.villa_categories?.[0]?.count ?? 0,
   }));
 }
 
