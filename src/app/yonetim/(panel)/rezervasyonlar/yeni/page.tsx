@@ -8,7 +8,7 @@ export default async function YeniRezervasyonPage() {
   const villas = await getVillaPricingOptions();
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <BackLink href="/yonetim/rezervasyonlar">Rezervasyonlar</BackLink>
 
       <div className="mt-3">

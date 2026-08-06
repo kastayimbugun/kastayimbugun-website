@@ -44,7 +44,7 @@ export default async function TalepDetayPage({
   const responded = responseMinutes(booking.createdAt, booking.firstResponseAt);
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <BackLink href="/yonetim/talepler">Talepler</BackLink>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">

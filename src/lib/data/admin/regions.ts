@@ -30,6 +30,47 @@ export interface AdminRegion {
   villaCount: number;
 }
 
+/** Tek bölge — düzenleme sayfası için (villa sayısıyla, silme kısıtı için). */
+export async function getAdminRegion(id: string): Promise<AdminRegion | null> {
+  const supabase = await supabaseSession();
+
+  const [{ data, error }, { count, error: countError }] = await Promise.all([
+    supabase
+      .from("regions")
+      .select("id, slug, name, province, hero_image, sort_order")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("villas")
+      .select("id", { count: "exact", head: true })
+      .eq("region_id", id),
+  ]);
+
+  if (error) throw new Error(`Bölge okunamadı: ${error.message}`);
+  if (countError)
+    throw new Error(`Bölge villa sayısı okunamadı: ${countError.message}`);
+  if (!data) return null;
+
+  const r = data as {
+    id: string;
+    slug: string;
+    name: string;
+    province: string;
+    hero_image: string | null;
+    sort_order: number;
+  };
+
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    province: r.province,
+    heroImageUrl: imageUrl(r.hero_image),
+    sortOrder: r.sort_order,
+    villaCount: count ?? 0,
+  };
+}
+
 /** Panel bölge listesi — villa sayılarıyla (silme kısıtı için). */
 export async function getAdminRegions(): Promise<AdminRegion[]> {
   const supabase = await supabaseSession();

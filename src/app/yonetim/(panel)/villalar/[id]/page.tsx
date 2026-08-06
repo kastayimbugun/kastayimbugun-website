@@ -40,7 +40,7 @@ export default async function VillaDetayPage({
   });
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <BackLink href="/yonetim/villalar">Villalar</BackLink>
 
       <div className="mt-3">

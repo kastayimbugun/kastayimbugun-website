@@ -20,7 +20,7 @@ export default async function KategoriDetayPage({
   if (!category) notFound();
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <BackLink href="/yonetim/kategoriler">Kategoriler</BackLink>
 
       <div className="mt-3">

@@ -8,7 +8,7 @@ export default async function YeniVillaPage() {
   const regions = await getRegionOptions();
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <BackLink href="/yonetim/villalar">Villalar</BackLink>
 
       <div className="mt-3">
