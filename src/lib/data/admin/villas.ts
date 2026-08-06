@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseSession } from "@/lib/supabase/session";
 import { safeTerm } from "./searchTerm";
+import { villaQuality } from "@/lib/villaQuality";
 import type { AmenityKey, PoolType } from "@/lib/types";
 
 export type VillaStatus = "draft" | "published" | "archived";
@@ -134,6 +135,8 @@ export interface AdminVillaListItem {
   status: VillaStatus;
   basePrice: number;
   regionName: string;
+  /** İçerik kalite skoru (0–100) ve eksikler (yol haritası 4.1). */
+  quality: import("@/lib/villaQuality").VillaQuality;
 }
 
 export interface AdminSeason {
@@ -348,7 +351,9 @@ export async function getAdminVillas(
   let query = withVillaFilters(
     supabase,
     f,
-    "id, name, slug, code, status, base_price, regions ( name )",
+    `id, name, slug, code, status, base_price, min_nights,
+     description_tr, description_en, regions ( name ),
+     villa_images ( count ), villa_seasons ( count )`,
     { count: "exact", head: false }
   );
 
@@ -380,7 +385,12 @@ export async function getAdminVillas(
       code: string | null;
       status: VillaStatus;
       base_price: number;
+      min_nights: number | null;
+      description_tr: string | null;
+      description_en: string | null;
       regions: { name: string } | null;
+      villa_images: { count: number }[];
+      villa_seasons: { count: number }[];
     }>).map((v) => ({
       id: v.id,
       name: v.name,
@@ -389,6 +399,14 @@ export async function getAdminVillas(
       status: v.status,
       basePrice: Number(v.base_price),
       regionName: v.regions?.name ?? "—",
+      quality: villaQuality({
+        descriptionTr: v.description_tr,
+        descriptionEn: v.description_en,
+        imageCount: v.villa_images?.[0]?.count ?? 0,
+        basePrice: Number(v.base_price),
+        seasonCount: v.villa_seasons?.[0]?.count ?? 0,
+        minNights: v.min_nights,
+      }),
     })),
   };
 }

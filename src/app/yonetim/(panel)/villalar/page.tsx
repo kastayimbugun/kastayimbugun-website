@@ -12,6 +12,7 @@ import { villaQuerySchema } from "@/lib/schemas/adminVilla";
 import { formatPrice } from "@/lib/format";
 import { villaStatusMeta } from "@/lib/adminMeta";
 import VillaFilterBar from "@/components/admin/VillaFilterBar";
+import QualityBadge from "@/components/admin/QualityBadge";
 import { PageHeader, EmptyState } from "@/components/admin/ui/PageHeader";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
 import { btnPrimary } from "@/components/admin/ui/styles";
@@ -169,10 +170,17 @@ export default async function VillalarPage({
                             {v.name}
                           </span>
                           <StatusBadge tone={s.tone}>{s.label}</StatusBadge>
+                          <QualityBadge quality={v.quality} />
                         </div>
                         <div className="text-sm text-brand-900/70">
                           {v.regionName}
                           {v.code ? ` · ${v.code}` : ""}
+                          {v.quality.missing.length > 0 && (
+                            <span className="text-brand-900/50">
+                              {" · "}
+                              {v.quality.missing.length} eksik
+                            </span>
+                          )}
                         </div>
                       </div>
                       <span className="shrink-0 text-sm font-semibold text-brand-950">
