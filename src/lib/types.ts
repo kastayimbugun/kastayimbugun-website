@@ -40,6 +40,15 @@ export interface Villa {
   pool: PoolType;
   size: number; // m2
   distanceToSea: number; // meters
+  /**
+   * Panelden girilen mesafeler (km). Doldurulmayan alan mesafe cetvelinde
+   * hiç gösterilmez — tahmini/uydurma değer basmaktansa satırı atlamak doğru.
+   */
+  distanceAirportKm?: number | null;
+  distanceMarketKm?: number | null;
+  distanceRestaurantKm?: number | null;
+  distanceTransitKm?: number | null;
+  distanceCenterKm?: number | null;
   rating: number; // 0-5
   reviewCount: number;
   featured: boolean;

@@ -10,6 +10,8 @@ import type { Villa, AmenityKey, PoolType } from "@/lib/types";
 
 const VILLA_FIELDS = `
   slug, name, code, capacity, bedrooms, bathrooms, pool, size_m2, distance_to_sea,
+  distance_airport_km, distance_market_km, distance_restaurant_km,
+  distance_transit_km, distance_center_km,
   rating, review_count, featured, discount_percent, deal_tag,
   check_in, check_out, min_nights, base_price, cleaning_fee, service_rate,
   description_tr, description_en, video_url, amenities,
@@ -29,6 +31,11 @@ interface VillaRow {
   pool: PoolType;
   size_m2: number | null;
   distance_to_sea: number | null;
+  distance_airport_km: number | null;
+  distance_market_km: number | null;
+  distance_restaurant_km: number | null;
+  distance_transit_km: number | null;
+  distance_center_km: number | null;
   rating: number | null;
   review_count: number | null;
   featured: boolean;
@@ -76,6 +83,11 @@ function mapVilla(row: VillaRow): Villa {
     pool: row.pool,
     size: row.size_m2 ?? 0,
     distanceToSea: row.distance_to_sea ?? 0,
+    distanceAirportKm: row.distance_airport_km,
+    distanceMarketKm: row.distance_market_km,
+    distanceRestaurantKm: row.distance_restaurant_km,
+    distanceTransitKm: row.distance_transit_km,
+    distanceCenterKm: row.distance_center_km,
     rating: Number(row.rating ?? 0),
     reviewCount: row.review_count ?? 0,
     featured: row.featured,

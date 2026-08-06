@@ -4,13 +4,23 @@ import {
   Umbrella,
   Plane,
   Bus,
-  Pill,
-  Fuel,
   Landmark,
   type LucideIcon,
 } from "lucide-react";
 import type { Villa } from "./types";
 import type { Lang } from "./i18n";
+
+/**
+ * Villa detayındaki "mesafe cetveli".
+ *
+ * Değerler panelden girilir (`0005_distance_facts.sql`). Girilmemiş bir alan
+ * için satır ÜRETİLMEZ — misafire tahmini sayı göstermek, hiç göstermemekten
+ * kötüdür. (Bu dosyanın önceki sürümü mesafeleri villa slug'ından türetilen
+ * sahte sayılarla üretiyordu; bkz. docs/harita-mesafe-arastirmasi.md §0.)
+ *
+ * Havaalanı, bölge düzeyinde sabit olduğu için aşağıdaki tablodan gelir; villa
+ * kaydında kendi değeri varsa o kazanır.
+ */
 
 export interface DistanceItem {
   icon: LucideIcon;
@@ -26,8 +36,6 @@ const T: Record<string, { tr: string; en: string }> = {
   center: { tr: "Merkez", en: "Town Center" },
   airport: { tr: "Hava Alanı", en: "Airport" },
   busTerminal: { tr: "Otobüs Terminali", en: "Bus Terminal" },
-  pharmacy: { tr: "Eczane", en: "Pharmacy" },
-  gas: { tr: "Benzin İstasyonu", en: "Gas Station" },
 };
 
 const airportsByRegion: Record<string, { name: string; km: number }[]> = {
@@ -39,35 +47,57 @@ const airportsByRegion: Record<string, { name: string; km: number }[]> = {
   Bodrum: [{ name: "Milas-Bodrum", km: 36 }, { name: "Dalaman", km: 250 }],
 };
 
-function seedNum(slug: string) {
-  return Array.from(slug).reduce((a, c) => a + c.charCodeAt(0), 0);
+/** Metreyi "850 m" / "1.4 km" biçiminde yazar. */
+function formatMeters(m: number) {
+  return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
-/** Villa için deterministik (slug'a bağlı, sabit) uzaklık listesi. */
 export function villaDistances(villa: Villa, lang: Lang): DistanceItem[] {
-  const s = seedNum(villa.slug);
-  // slug'a bağlı sabit "rastgele" km değeri (min–max, tek ondalık)
-  const km = (salt: number, min: number, max: number) =>
-    (min + ((s * salt) % ((max - min) * 10)) / 10).toFixed(1);
-
   const L = (k: string) => T[k][lang];
-  const beach =
-    villa.distanceToSea < 1000
-      ? `${villa.distanceToSea} m`
-      : `${(villa.distanceToSea / 1000).toFixed(1)} km`;
-  const airports =
-    airportsByRegion[villa.region] ??
-    [{ name: "Dalaman", km: 120 }, { name: "Antalya", km: 200 }];
+  const items: DistanceItem[] = [];
 
-  return [
-    { icon: UtensilsCrossed, label: L("restaurant"), value: `${km(7, 0.3, 5)} km` },
-    { icon: ShoppingCart, label: L("market"), value: `${km(11, 0.3, 4)} km` },
-    { icon: Umbrella, label: L("beach"), detail: villa.region, value: beach },
-    { icon: Landmark, label: L("center"), detail: villa.region, value: `${km(5, 1, 8)} km` },
-    { icon: Plane, label: L("airport"), detail: airports[0].name, value: `${airports[0].km} km` },
-    { icon: Plane, label: L("airport"), detail: airports[1].name, value: `${airports[1].km} km` },
-    { icon: Bus, label: L("busTerminal"), detail: villa.region, value: `${km(13, 5, 25)} km` },
-    { icon: Pill, label: L("pharmacy"), value: `${km(17, 0.4, 6)} km` },
-    { icon: Fuel, label: L("gas"), value: `${km(19, 0.5, 7)} km` },
-  ];
+  /** Değer girilmemişse (null/undefined) satır eklenmez. */
+  const push = (
+    icon: LucideIcon,
+    label: string,
+    km: number | null | undefined,
+    detail?: string
+  ) => {
+    if (km == null) return;
+    items.push({ icon, label, detail, value: `${km} km` });
+  };
+
+  push(UtensilsCrossed, L("restaurant"), villa.distanceRestaurantKm);
+  push(ShoppingCart, L("market"), villa.distanceMarketKm);
+
+  // Denize uzaklık metre cinsinden ayrı bir alanda tutuluyor ve her villada dolu.
+  if (villa.distanceToSea > 0) {
+    items.push({
+      icon: Umbrella,
+      label: L("beach"),
+      detail: villa.region,
+      value: formatMeters(villa.distanceToSea),
+    });
+  }
+
+  push(Landmark, L("center"), villa.distanceCenterKm, villa.region);
+
+  const airports = airportsByRegion[villa.region];
+  if (villa.distanceAirportKm != null) {
+    // Villaya özel değer girilmişse bölge tablosunun önüne geçer.
+    push(Plane, L("airport"), villa.distanceAirportKm, airports?.[0]?.name);
+  } else if (airports) {
+    for (const a of airports) {
+      items.push({
+        icon: Plane,
+        label: L("airport"),
+        detail: a.name,
+        value: `${a.km} km`,
+      });
+    }
+  }
+
+  push(Bus, L("busTerminal"), villa.distanceTransitKm, villa.region);
+
+  return items;
 }
