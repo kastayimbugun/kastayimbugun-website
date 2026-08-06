@@ -64,7 +64,12 @@ export async function createBookingRequest(
   }
 
   // 5) Fiyatı sunucuda hesapla (istemciden geleni kullanma)
-  const price = calcPrice(villa, data.checkIn, data.checkOut);
+  // Fiyat kuralları sunucuda uygulanır (kapasite üstü + son dakika için kişi
+  // sayısı ve bugün gerekir). İstemcideki tutar sadece gösterim.
+  const price = calcPrice(villa, data.checkIn, data.checkOut, {
+    guests: guestsTotal,
+    asOf: today,
+  });
 
   // 6) villa_id'yi çöz ve kaydı yaz
   const admin = supabaseAdmin();

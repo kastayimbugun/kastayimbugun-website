@@ -14,6 +14,8 @@ const VILLA_FIELDS = `
   distance_transit_km, distance_center_km,
   rating, review_count, featured, discount_percent, deal_tag,
   check_in, check_out, min_nights, base_price, cleaning_fee, service_rate,
+  weekend_premium_percent, los_weekly_discount_percent, los_monthly_discount_percent,
+  last_minute_discount_percent, last_minute_days, extra_guest_fee, extra_guest_after,
   description_tr, description_en, video_url, amenities,
   regions ( name, province ),
   villa_images ( storage_path, sort_order ),
@@ -47,6 +49,13 @@ interface VillaRow {
   base_price: number;
   cleaning_fee: number | null;
   service_rate: number | null;
+  weekend_premium_percent: number | null;
+  los_weekly_discount_percent: number | null;
+  los_monthly_discount_percent: number | null;
+  last_minute_discount_percent: number | null;
+  last_minute_days: number | null;
+  extra_guest_fee: number | null;
+  extra_guest_after: number | null;
   description_tr: string | null;
   description_en: string | null;
   video_url: string | null;
@@ -102,6 +111,13 @@ function mapVilla(row: VillaRow): Villa {
     pricePerNight: Number(row.base_price),
     cleaningFee: row.cleaning_fee ?? undefined,
     serviceRate: row.service_rate ?? undefined,
+    weekendPremiumPercent: row.weekend_premium_percent,
+    losWeeklyDiscountPercent: row.los_weekly_discount_percent,
+    losMonthlyDiscountPercent: row.los_monthly_discount_percent,
+    lastMinuteDiscountPercent: row.last_minute_discount_percent,
+    lastMinuteDays: row.last_minute_days,
+    extraGuestFee: row.extra_guest_fee != null ? Number(row.extra_guest_fee) : null,
+    extraGuestAfter: row.extra_guest_after,
     bookedRanges: row.villa_blocks.map((b) => ({
       start: b.starts_on,
       end: b.ends_on,

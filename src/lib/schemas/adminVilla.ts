@@ -109,6 +109,35 @@ export const villaFormSchema = z.object({
   basePrice: z.coerce.number().min(0, "Fiyat negatif olamaz"),
   cleaningFee: z.coerce.number().min(0),
   serviceRate: z.coerce.number().min(0).max(1),
+  // Fiyat kuralları (4.3) — hepsi opsiyonel; boş/0 uygulanmaz.
+  weekendPremiumPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(100).nullable()
+  ),
+  losWeeklyDiscountPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(90).nullable()
+  ),
+  losMonthlyDiscountPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(90).nullable()
+  ),
+  lastMinuteDiscountPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(90).nullable()
+  ),
+  lastMinuteDays: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(1).max(90).nullable()
+  ),
+  extraGuestFee: z.preprocess(
+    emptyToNull,
+    z.coerce.number().min(0).max(1_000_000).nullable()
+  ),
+  extraGuestAfter: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(1).max(100).nullable()
+  ),
   descriptionTr: z.preprocess(emptyToNull, z.string().max(4000).nullable()),
   descriptionEn: z.preprocess(emptyToNull, z.string().max(4000).nullable()),
   videoUrl: z.preprocess(

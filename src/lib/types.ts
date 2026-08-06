@@ -67,6 +67,14 @@ export interface Villa {
   cleaningFee?: number;
   /** Hizmet bedeli oranı, ör. 0.05 */
   serviceRate?: number;
+  /** Fiyat kuralları (Faz 5.7 / 4.3) — hepsi opsiyonel, calcPrice'ta uygulanır. */
+  weekendPremiumPercent?: number | null;
+  losWeeklyDiscountPercent?: number | null;
+  losMonthlyDiscountPercent?: number | null;
+  lastMinuteDiscountPercent?: number | null;
+  lastMinuteDays?: number | null;
+  extraGuestFee?: number | null;
+  extraGuestAfter?: number | null;
   /** Reserved date ranges (ISO yyyy-mm-dd, inclusive start, exclusive end) */
   bookedRanges: { start: string; end: string }[];
   /** Seasonal pricing rows shown in the price table */

@@ -203,6 +203,13 @@ export interface AdminVillaFull {
   basePrice: number;
   cleaningFee: number;
   serviceRate: number;
+  weekendPremiumPercent: number | null;
+  losWeeklyDiscountPercent: number | null;
+  losMonthlyDiscountPercent: number | null;
+  lastMinuteDiscountPercent: number | null;
+  lastMinuteDays: number | null;
+  extraGuestFee: number | null;
+  extraGuestAfter: number | null;
   descriptionTr: string | null;
   descriptionEn: string | null;
   videoUrl: string | null;
@@ -228,7 +235,11 @@ export async function getVillaForEdit(
        distance_transit_km, distance_center_km,
        rating, review_count, featured,
        discount_percent, deal_tag, check_in, check_out, min_nights,
-       base_price, cleaning_fee, service_rate, description_tr, description_en,
+       base_price, cleaning_fee, service_rate,
+       weekend_premium_percent, los_weekly_discount_percent,
+       los_monthly_discount_percent, last_minute_discount_percent,
+       last_minute_days, extra_guest_fee, extra_guest_after,
+       description_tr, description_en,
        video_url, amenities, updated_at,
        villa_images ( id, storage_path, sort_order, alt_tr )`
     )
@@ -277,6 +288,14 @@ export async function getVillaForEdit(
     basePrice: Number(r.base_price),
     cleaningFee: Number(r.cleaning_fee ?? 0),
     serviceRate: Number(r.service_rate ?? 0.05),
+    weekendPremiumPercent: (r.weekend_premium_percent as number) ?? null,
+    losWeeklyDiscountPercent: (r.los_weekly_discount_percent as number) ?? null,
+    losMonthlyDiscountPercent: (r.los_monthly_discount_percent as number) ?? null,
+    lastMinuteDiscountPercent: (r.last_minute_discount_percent as number) ?? null,
+    lastMinuteDays: (r.last_minute_days as number) ?? null,
+    extraGuestFee:
+      r.extra_guest_fee != null ? Number(r.extra_guest_fee) : null,
+    extraGuestAfter: (r.extra_guest_after as number) ?? null,
     descriptionTr: (r.description_tr as string) ?? null,
     descriptionEn: (r.description_en as string) ?? null,
     videoUrl: (r.video_url as string) ?? null,
