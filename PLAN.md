@@ -290,8 +290,16 @@ fotoğraflarını yükle; hero için kısa mp4 hazırla. Lighthouse ölçümü f
 
 **Durum: çekirdek tamam (24.07.2026).** Form → Server Action → sunucu doğrulaması →
 sunucuda fiyat hesabı → `booking_requests` kaydı → teşekkür sayfası. Uçtan uca test edildi
-(talep DB'ye düştü, tutar sunucuda 54.000 hesaplandı). Kalan: e-posta bildirimi (Resend
-anahtarı), WhatsApp butonu (numara), gerçek hız sınırı (Upstash). Turnstile kancası hazır,
+(talep DB'ye düştü, tutar sunucuda 54.000 hesaplandı).
+
+**E-posta bildirimi ✅ TAMAM (05.08.2026).** Resend üzerinden iki e-posta: acenteye "yeni
+talep" (Türkçe, "Yanıtla" misafire gider), misafire "talebiniz alındı" (kendi dilinde, yalnızca
+e-posta verdiyse). Gönderim `after()` ile yanıttan sonra çalışır — form beklemez; anahtar yoksa
+veya API hata verirse talep yine geçerlidir (`src/lib/email/**`). Canlı test edildi, mail ulaştı.
+> Doğrulanmış alan adı bağlanana kadar Resend yalnızca hesap sahibinin adresine gönderir;
+> `RESEND_FROM_EMAIL` Faz 7'de domain doğrulanınca tanımlanacak.
+
+Kalan: WhatsApp butonu (numara), gerçek hız sınırı (Upstash). Turnstile kancası hazır,
 anahtar gelince aktifleşir.
 
 **Amaç:** "Rezervasyon Talebi Oluştur" gerçekten bir yere düşsün; takvim gerçek doluluğu göstersin.
@@ -331,6 +339,40 @@ Panel kod denetimi + sektör araştırması: **[docs/panel-yol-haritasi.md](docs
 45 bulgu, 5 dalgaya bölünmüş. Dalga 0 (veri kaybettiren 3 hata + mobilde menü olmaması)
 yayın öncesi kapatılmalı. Dalga 0+1 ≈ 2,5 gün, +Dalga 2 (Bugün ekranı, talep notları,
 satış hattı) ≈ 4,5 gün.
+**Durum: Dalga 0 ✅ · Dalga 1 ✅ · Dalga 2.1 ✅ · Dalga 3.1'in talepler yarısı ✅ (04.08.2026).**
+
+---
+
+### FAZ 5.7 — Panel tamamlama (Dalga 2+3+4)
+
+**Kapsam kararı (05.08.2026):** Yol haritasında açık kalan tüm dalgalar tek fazda kapatılacak;
+panel bundan sonra "eksik madde" listesi taşımayacak. Gerekçe: villalar panele girilmeden
+önce formun veri ezen hatası ve kalite skoru hazır olmalı; sezon/takvim işleri de villa
+sayısı artmadan yazılırsa ucuz.
+
+Sıra bağımlılığa göre — şema önce, sonra hatalar, sonra ekranlar:
+
+| # | İş | Yol haritası |
+|---|---|---|
+| 1 | `booking_notes` tablosu + `quoted`/`lost` durumları + `lost_reason` + `first_response_at` | şema §4 |
+| 2 | Villa formundaki **bayat veri** hatası + eşzamanlı düzenleme kararının belgelenmesi | 3.4 |
+| 3 | Villalar listesi: arama/filtre/sayfalama + **arşiv ayrımı** + verimsiz sayımlar | 3.1 kalanı |
+| 4 | Talep notları + takip tarihi (talep detay sayfası) | 2.2 |
+| 5 | Satış hattı durumları + zorunlu kayıp sebebi | 2.3 |
+| 6 | Yanıt süresi ölçümü (dashboard ortalaması) | 2.4 |
+| 7 | Multi-calendar — gap night'ları görmek | 3.2 |
+| 8 | Tarih aralığı + çoklu villa toplu güncelleme | 3.3 |
+| 9 | Villa içerik kalite skoru | 4.1 |
+| 10 | Fotoğraf yönetimi: "kapak yap", sürükle-bırak, dosya başına ilerleme | 4.2 |
+| 11 | Fiyat kuralları: hafta sonu / uzun konaklama / son dakika / kapasite üstü | 4.3 |
+| 12 | Kalanlar: giriş kaba kuvvet koruması, sekme URL'de, tarih biçimi, form gezinmesi | 4.4 |
+
+**Kapsam dışı — bilinçli:** kanal yöneticisi/OTA senkronu, otomasyon kural motoru, dinamik
+fiyatlandırma, muhasebe modülü, analitik panosu, rol yönetimi ekranı, birleşik gelen kutusu.
+Gerekçeleri yol haritası §5'te; bu ölçekte zarar verdikleri için yapılmayacak.
+
+**Bitti sayılır:** Yol haritasındaki 45 bulgunun tamamı ya kapalı ya da §5'te "yapmayacağız"
+olarak gerekçelendirilmiş durumda.
 
 **Amaç:** Acente kendi villasını, fiyatını, takvimini kendi girsin; sana bağımlı kalmasın.
 
