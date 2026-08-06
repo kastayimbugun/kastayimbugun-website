@@ -29,6 +29,8 @@ export interface DashboardOverview {
   monthRequestsTotal: number;
   monthConfirmedCount: number;
   monthConfirmedRevenue: number;
+  /** Son 30 günde ilk yanıta kadar geçen ortalama dakika; ölçüm yoksa null. */
+  avgResponseMinutes: number | null;
 }
 
 /**
@@ -52,6 +54,10 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoISO = sevenDaysAgo.toISOString();
 
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
+
   const [
     villasTotalRes,
     villasPublishedRes,
@@ -63,6 +69,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     last7Res,
     monthAllRes,
     monthConfirmedRes,
+    responseRes,
   ] = await Promise.all([
     supabase.from("villas").select("*", { count: "exact", head: true }),
     supabase
@@ -107,6 +114,13 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       .select("price_estimate")
       .eq("status", "confirmed")
       .gte("created_at", monthStart),
+    // Yanıt süresi (Dalga 2.4): yalnızca yanıtlanmış son 30 günlük talepler.
+    // Aralık dar olduğu için satırları çekip ortalamayı burada almak yeterli.
+    supabase
+      .from("booking_requests")
+      .select("created_at, first_response_at")
+      .not("first_response_at", "is", null)
+      .gte("created_at", thirtyDaysAgoISO),
   ]);
 
   interface ArrivalRow {
@@ -136,6 +150,22 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     (monthConfirmedRes.data as { price_estimate: number | null }[] | null) ??
     [];
 
+  const responseRows =
+    (responseRes.data as
+      | { created_at: string; first_response_at: string }[]
+      | null) ?? [];
+
+  const avgResponseMinutes = responseRows.length
+    ? responseRows.reduce(
+        (sum, r) =>
+          sum +
+          (new Date(r.first_response_at).getTime() -
+            new Date(r.created_at).getTime()) /
+            60000,
+        0
+      ) / responseRows.length
+    : null;
+
   return {
     villasTotal: villasTotalRes.count ?? 0,
     villasPublished: villasPublishedRes.count ?? 0,
@@ -160,5 +190,6 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       (sum, r) => sum + (r.price_estimate ?? 0),
       0
     ),
+    avgResponseMinutes,
   };
 }

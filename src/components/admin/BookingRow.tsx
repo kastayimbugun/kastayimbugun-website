@@ -111,6 +111,13 @@ export default function BookingRow({ booking: r }: { booking: AdminBooking }) {
           {r.nights} gece
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <Link
+            href={`/yonetim/talepler/${r.id}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+          >
+            <Pencil className="h-3 w-3" />
+            Detay / düzenle
+          </Link>
           {r.villaId && (
             <Link
               href={`/yonetim/villalar/${r.villaId}`}
