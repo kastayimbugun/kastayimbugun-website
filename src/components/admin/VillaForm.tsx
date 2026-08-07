@@ -227,7 +227,9 @@ export default function VillaForm({
         if (mode === "create") {
           toast.success("Villa oluşturuldu.");
           setSaved(payload); // çıkış uyarısı tetiklenmesin
-          router.push(`/yonetim/villalar/${res.id}`);
+          // Kayıttan sonra doğrudan Görseller sekmesine: fotoğraf yükleme
+          // villa oluşturmanın devamı gibi hissedilsin, ayrı bir adım gibi değil.
+          router.push(`/yonetim/villalar/${res.id}?sekme=images`);
         } else {
           setSaved(payload);
           toast.success("Kaydedildi.");

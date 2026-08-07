@@ -50,6 +50,13 @@ export async function processImage(
   }
   if (!out) return null;
 
+  // Son savunma: çıktı gerçekten geçerli bir WebP mi?
+  // 06.08.2026'da Storage'a başlığı bozuk ("RIFF" var ama "WEBP" yok, araya
+  // U+FFFD baytları girmiş) dosyalar yazıldı; bunlar sessizce kaydedildi ve
+  // ancak sitede kırık görsel olarak fark edildi. Bozuk bayt dizisi buradan
+  // öteye geçmesin — yükleme, kayıt atılmadan reddedilir.
+  if (!isWebp(out.data)) return null;
+
   return {
     buffer: out.data,
     width: out.info.width,
@@ -57,4 +64,13 @@ export async function processImage(
     contentType: "image/webp",
     ext: "webp",
   };
+}
+
+/** WebP kap imzası: "RIFF" + 4 bayt boyut + "WEBP". */
+export function isWebp(buf: Buffer): boolean {
+  return (
+    buf.length > 12 &&
+    buf.toString("latin1", 0, 4) === "RIFF" &&
+    buf.toString("latin1", 8, 12) === "WEBP"
+  );
 }
