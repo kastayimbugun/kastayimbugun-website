@@ -86,3 +86,37 @@ export interface Villa {
     price: number;
   }[];
 }
+
+export interface CustomPage {
+  id: string;
+  slug: string;
+  titleTr: string;
+  titleEn: string;
+  contentTr: string;
+  contentEn: string;
+  metaTitleTr?: string | null;
+  metaTitleEn?: string | null;
+  metaDescriptionTr?: string | null;
+  metaDescriptionEn?: string | null;
+  status: "draft" | "published";
+  showInFooter: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PageInput {
+  slug: string;
+  titleTr: string;
+  titleEn: string;
+  contentTr: string;
+  contentEn: string;
+  metaTitleTr?: string;
+  metaTitleEn?: string;
+  metaDescriptionTr?: string;
+  metaDescriptionEn?: string;
+  status: "draft" | "published";
+  showInFooter: boolean;
+  sortOrder: number;
+}
+

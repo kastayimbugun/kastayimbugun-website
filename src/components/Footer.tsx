@@ -21,8 +21,20 @@ const socials = [
   },
 ];
 
-export default function Footer({ regions }: { regions: Region[] }) {
-  const { t } = useI18n();
+export interface FooterPageLink {
+  slug: string;
+  titleTr: string;
+  titleEn: string;
+}
+
+export default function Footer({
+  regions,
+  footerPages = [],
+}: {
+  regions: Region[];
+  footerPages?: FooterPageLink[];
+}) {
+  const { t, lang } = useI18n();
 
   return (
     <footer
@@ -75,18 +87,31 @@ export default function Footer({ regions }: { regions: Region[] }) {
               {t("footer.company")}
             </h4>
             <ul className="mt-4 space-y-2.5 text-sm">
-              {[
-                t("nav.about"),
-                t("nav.listProperty"),
-                t("footer.terms"),
-                t("footer.privacy"),
-              ].map((l) => (
-                <li key={l}>
-                  <a href="#" className="text-brand-900/60 hover:text-sun-600 transition">
-                    {l}
-                  </a>
-                </li>
-              ))}
+              {footerPages.length > 0 ? (
+                footerPages.map((p) => (
+                  <li key={p.slug}>
+                    <Link
+                      href={`/sayfa/${p.slug}`}
+                      className="text-brand-900/60 hover:text-sun-600 transition"
+                    >
+                      {lang === "en" ? p.titleEn : p.titleTr}
+                    </Link>
+                  </li>
+                ))
+              ) : (
+                [
+                  t("nav.about"),
+                  t("nav.listProperty"),
+                  t("footer.terms"),
+                  t("footer.privacy"),
+                ].map((l) => (
+                  <li key={l}>
+                    <a href="#" className="text-brand-900/60 hover:text-sun-600 transition">
+                      {l}
+                    </a>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
 

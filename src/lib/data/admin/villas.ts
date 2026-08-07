@@ -3,14 +3,10 @@ import { supabaseSession } from "@/lib/supabase/session";
 import { safeTerm } from "./searchTerm";
 import { villaQuality } from "@/lib/villaQuality";
 import type { AmenityKey, PoolType } from "@/lib/types";
+import { imageUrl } from "@/lib/images/url";
 
 export type VillaStatus = "draft" | "published" | "archived";
 
-/** Storage yolunu tam public URL'ye çevirir (demo veride zaten tam URL gelebilir). */
-export function imageUrl(path: string) {
-  if (path.startsWith("http")) return path;
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/villa-images/${path}`;
-}
 
 export interface VillaOption {
   id: string;
