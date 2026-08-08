@@ -25,14 +25,53 @@ export type RegionImageResult =
   | { ok: true }
   | { ok: false; error: "auth" | "validation" | "toobig" | "type" | "generic" };
 
-function toRow(d: RegionFormInput) {
+async function toRow(
+  supabase: Awaited<ReturnType<typeof supabaseSession>>,
+  d: RegionFormInput,
+  isNew = false
+) {
+  let depth = 0;
+  let province = d.province;
+
+  if (d.parentId) {
+    const { data: parent } = await supabase
+      .from("regions")
+      .select("name, depth")
+      .eq("id", d.parentId)
+      .maybeSingle();
+
+    if (parent) {
+      depth = (parent.depth ?? 0) + 1;
+      province = parent.name;
+    }
+  }
+
+  // Yeni bölge eklenirken sıralamayı otomatik hesapla:
+  // Aynı parent altındaki en yüksek sort_order'ın bir fazlası.
+  let sortOrder = d.sortOrder;
+  if (isNew) {
+    const query = d.parentId
+      ? supabase.from("regions").select("sort_order").eq("parent_id", d.parentId)
+      : supabase.from("regions").select("sort_order").is("parent_id", null);
+
+    const { data: siblings } = await query.order("sort_order", { ascending: false }).limit(1);
+    if (siblings && siblings.length > 0) {
+      sortOrder = (siblings[0].sort_order ?? 0) + 1;
+    } else {
+      sortOrder = 0;
+    }
+  }
+
   return {
     name: d.name,
-    province: d.province,
+    province: province,
     slug: d.slug,
-    sort_order: d.sortOrder,
+    sort_order: sortOrder,
+    parent_id: d.parentId || null,
+    depth: depth,
   };
 }
+
 
 function revalidate() {
   revalidatePath("/yonetim/bolgeler");
@@ -49,9 +88,10 @@ export async function createRegion(input: unknown): Promise<RegionResult> {
   }
 
   const supabase = await supabaseSession();
+  const rowData = await toRow(supabase, parsed.data, true); // isNew=true: sort_order otomatik atanır
   const { data, error } = await supabase
     .from("regions")
-    .insert(toRow(parsed.data))
+    .insert(rowData)
     .select("id")
     .single();
   if (error) {
@@ -79,9 +119,10 @@ export async function updateRegion(input: unknown): Promise<RegionResult> {
   const { id, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
+  const rowData = await toRow(supabase, fields);
   const { error } = await supabase
     .from("regions")
-    .update(toRow(fields))
+    .update(rowData)
     .eq("id", id);
   if (error) {
     if (error.code === "23505") {
@@ -164,6 +205,62 @@ export async function removeRegionHero(
   if (error) return { ok: false, error: "generic" };
 
   await removeImage(supabase, region?.hero_image);
+  revalidate();
+  return { ok: true };
+}
+
+export async function updateRegionsTreeOrder(
+  items: { id: string; parentId: string | null; depth: number; sortOrder: number }[]
+): Promise<RegionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: true };
+  }
+
+  const supabase = await supabaseSession();
+
+  // Toplu güncelleme: parent_id, depth ve sort_order
+  for (const item of items) {
+    const { error } = await supabase
+      .from("regions")
+      .update({
+        parent_id: item.parentId,
+        depth: item.depth,
+        sort_order: item.sortOrder,
+      })
+      .eq("id", item.id);
+
+    if (error) {
+      return { ok: false, error: "generic" };
+    }
+  }
+
+  revalidate();
+  return { ok: true };
+}
+
+export async function updateRegionsOrder(
+  items: { id: string; sortOrder: number }[]
+): Promise<RegionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: true };
+  }
+
+  const supabase = await supabaseSession();
+
+  // Toplu güncelleme
+  for (const item of items) {
+    await supabase
+      .from("regions")
+      .update({ sort_order: item.sortOrder })
+      .eq("id", item.id);
+  }
+
   revalidate();
   return { ok: true };
 }

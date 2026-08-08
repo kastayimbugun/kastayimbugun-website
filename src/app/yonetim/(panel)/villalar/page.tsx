@@ -16,6 +16,7 @@ import QualityBadge from "@/components/admin/QualityBadge";
 import { PageHeader, EmptyState } from "@/components/admin/ui/PageHeader";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
 import { btnPrimary } from "@/components/admin/ui/styles";
+import DeleteVillaButton from "@/components/admin/DeleteVillaButton";
 
 export const dynamic = "force-dynamic";
 
@@ -159,10 +160,13 @@ export default async function VillalarPage({
               {page.rows.map((v) => {
                 const s = villaStatusMeta[v.status];
                 return (
-                  <li key={v.id}>
+                  <li
+                    key={v.id}
+                    className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-sand-50"
+                  >
                     <Link
                       href={`/yonetim/villalar/${v.id}`}
-                      className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-sand-50 focus-visible:ring-2 focus-visible:ring-brand-300"
+                      className="flex min-w-0 flex-1 items-center gap-4 focus-visible:ring-2 focus-visible:ring-brand-300 rounded-lg"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -188,6 +192,9 @@ export default async function VillalarPage({
                       </span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-brand-900/50" />
                     </Link>
+                    <div className="shrink-0">
+                      <DeleteVillaButton villaId={v.id} villaName={v.name} />
+                    </div>
                   </li>
                 );
               })}

@@ -35,6 +35,9 @@ export default function Gallery({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, images.length]);
 
+  // Hiç fotoğraf yoksa Next.js Image'a boş src geçmemek için erken çıkış
+  if (!images.length || !images[0]) return null;
+
   return (
     <>
       <div className="relative grid grid-cols-4 grid-rows-2 gap-2 overflow-hidden rounded-2xl sm:h-[420px]">

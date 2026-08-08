@@ -23,18 +23,27 @@ export interface ProcessedImage {
   ext: "webp";
 }
 
-/** Görsel dosyasını WebP'ye çevirir. Görsel değilse/bozuksa null döner. */
+/**
+ * Görsel dosyasını WebP'ye çevirir. Görsel değilse/bozuksa null döner.
+ *
+ * `animated: true` verildiğinde çok kareli girdiler (GIF) tüm kareleriyle
+ * animasyonlu WebP'ye çevrilir — reklam bandı gibi hareketli görseller için.
+ * Bu modda `.rotate()` uygulanmaz: sharp animasyonlu akışta EXIF döndürmeyi
+ * desteklemez ve GIF'lerde yön etiketi zaten bulunmaz.
+ */
 export async function processImage(
   file: File,
-  maxEdge = MAX_EDGE
+  maxEdge = MAX_EDGE,
+  animated = false
 ): Promise<ProcessedImage | null> {
   const input = Buffer.from(await file.arrayBuffer());
 
   let out: { data: Buffer; info: OutputInfo } | null = null;
   for (const quality of QUALITY_STEPS) {
     try {
-      out = await sharp(input)
-        .rotate()
+      const pipeline = sharp(input, { animated });
+      if (!animated) pipeline.rotate();
+      out = await pipeline
         .resize({
           width: maxEdge,
           height: maxEdge,
@@ -46,6 +55,8 @@ export async function processImage(
     } catch {
       return null; // sharp okuyamadıysa görsel değil
     }
+    // Animasyonlu WebP hedef boyutu doğal olarak aşabilir; kaliteyi sonuna kadar
+    // düşürüp yine de kabul et (kare kaybetmemek için burada döngüyü zorlamayız).
     if (out.data.byteLength <= TARGET_BYTES) break;
   }
   if (!out) return null;

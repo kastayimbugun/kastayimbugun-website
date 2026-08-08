@@ -90,6 +90,22 @@ export const siteSettingsSchema = z.object({
   // Konfirmasyon belgesi
   confirmationDepositNote: optionalText(800, "Depozito metni"),
   confirmationCheckinNote: optionalText(800, "Giriş/çıkış metni"),
+
+  // Villa detay görünürlük tercihleri — ham nesne olarak gelir; action tarafında
+  // resolveVillaDetailPrefs ile temizlenip normalize edilir (bilinmeyen anahtarlar
+  // atılır), o yüzden burada gevşek doğrulama yeterli.
+  villaDetailPrefs: z.unknown().optional(),
+
+  // Reklam bandı: web/mobil göster-gizle ve tıklama bağlantısı (görseller ayrı
+  // yüklenir). Bağlantı boşsa villalar sayfasına gider — çağıran taraf halleder.
+  adShowWeb: z.boolean().default(false),
+  adShowMobile: z.boolean().default(false),
+  adLinkUrl: optionalText(300, "Reklam bağlantısı"),
+
+  // Header/Footer yapılandırması — ham nesne; action'da resolve* ile normalize
+  // edilir (bilinmeyen anahtarlar atılır), o yüzden gevşek doğrulama yeterli.
+  headerConfig: z.unknown().optional(),
+  footerConfig: z.unknown().optional(),
 });
 
 export type SiteSettingsInput = z.infer<typeof siteSettingsSchema>;

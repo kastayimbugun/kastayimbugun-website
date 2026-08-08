@@ -65,11 +65,28 @@ export default function CategoryBrowser({
       checkScrollBounds();
     };
 
+    // Dikey fare tekerleğini yatay kaydırmaya çevir. Native + passive:false
+    // ki sayfanın dikey kaymasını engelleyebilelim (React onWheel passive'dir,
+    // orada preventDefault çalışmaz → hem şerit döner hem sayfa inerdi).
+    const handleWheelNative = (e: WheelEvent) => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return; // kayacak yer yok → sayfaya bırak
+      // Touchpad yatay jesti (deltaX baskın) zaten doğal yatay kaydırır; sadece
+      // dikey baskın harekette devreye gir.
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const atStart = e.deltaY < 0 && el.scrollLeft <= 0;
+      const atEnd = e.deltaY > 0 && el.scrollLeft >= maxScroll - 1;
+      if (atStart || atEnd) return; // şerit sonunda → sayfaya devret
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+
     el.addEventListener("mouseenter", handlePointerEnter);
     el.addEventListener("mouseleave", handlePointerLeave);
     el.addEventListener("touchstart", handleTouchStart, { passive: true });
     el.addEventListener("touchend", handleTouchEnd, { passive: true });
     el.addEventListener("scroll", handleScroll, { passive: true });
+    el.addEventListener("wheel", handleWheelNative, { passive: false });
 
     const interval = setInterval(() => {
       if (isPaused || isMouseDownRef.current || !containerRef.current) return;
@@ -105,6 +122,7 @@ export default function CategoryBrowser({
       el.removeEventListener("touchstart", handleTouchStart);
       el.removeEventListener("touchend", handleTouchEnd);
       el.removeEventListener("scroll", handleScroll);
+      el.removeEventListener("wheel", handleWheelNative);
     };
   }, []);
 
@@ -136,14 +154,6 @@ export default function CategoryBrowser({
     setTimeout(() => {
       setIsDraggingState(false);
     }, 50);
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (e.deltaY !== 0) {
-      el.scrollLeft += e.deltaY;
-    }
   };
 
   const scrollByAmount = (amount: number) => {
@@ -182,7 +192,6 @@ export default function CategoryBrowser({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onWheel={handleWheel}
         className={`no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 select-none ${
           isDraggingState ? "cursor-grabbing" : "cursor-grab"
         }`}

@@ -4,11 +4,22 @@ import { revalidatePath } from "next/cache";
 import { getStaffUser } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import { storeImage, removeImage, type StoreError } from "@/lib/images/store";
+import { imageUrl } from "@/lib/images/url";
 import { siteSettingsSchema } from "@/lib/schemas/adminSite";
 import { toFieldErrors } from "@/lib/schemas/fieldErrors";
+import { resolveVillaDetailPrefs } from "@/lib/villaDetailPrefs";
+import {
+  resolveHeaderConfig,
+  resolveFooterConfig,
+} from "@/lib/headerFooter";
 
 export type SiteResult =
   | { ok: true }
+  | { ok: false; error: "auth" | StoreError };
+
+/** Footer görseli yüklemede path + url döner (jsonb'ye çağıran taraf yazar). */
+export type FooterImageResult =
+  | { ok: true; path: string; url: string }
   | { ok: false; error: "auth" | StoreError };
 
 export type SiteSettingsResult =
@@ -20,7 +31,12 @@ export type SiteSettingsResult =
     };
 
 /** `site_settings` içindeki görsel sütunları. */
-type ImageColumn = "hero_image" | "logo_image" | "og_image";
+type ImageColumn =
+  | "hero_image"
+  | "logo_image"
+  | "og_image"
+  | "ad_web_image"
+  | "ad_mobile_image";
 
 function revalidate() {
   revalidatePath("/yonetim/ayarlar");
@@ -49,7 +65,8 @@ async function currentPath(
 async function uploadSettingImage(
   column: ImageColumn,
   prefix: string,
-  file: FormDataEntryValue | null
+  file: FormDataEntryValue | null,
+  animated = false
 ): Promise<SiteResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "auth" };
@@ -57,7 +74,7 @@ async function uploadSettingImage(
   const supabase = await supabaseSession();
   const previous = await currentPath(supabase, column);
 
-  const stored = await storeImage(supabase, file, prefix);
+  const stored = await storeImage(supabase, file, prefix, animated);
   if (!stored.ok) return stored;
 
   const { error } = await supabase
@@ -119,6 +136,43 @@ export async function removeSiteOgImage(): Promise<SiteResult> {
   return removeSettingImage("og_image");
 }
 
+/** Reklam bandı — web (yatay) görseli. GIF animasyonu korunur. */
+export async function uploadAdWebImage(
+  formData: FormData
+): Promise<SiteResult> {
+  return uploadSettingImage("ad_web_image", "site/ad-web", formData.get("file"), true);
+}
+
+export async function removeAdWebImage(): Promise<SiteResult> {
+  return removeSettingImage("ad_web_image");
+}
+
+/** Reklam bandı — mobil görseli. GIF animasyonu korunur. */
+export async function uploadAdMobileImage(
+  formData: FormData
+): Promise<SiteResult> {
+  return uploadSettingImage("ad_mobile_image", "site/ad-mobile", formData.get("file"), true);
+}
+
+export async function removeAdMobileImage(): Promise<SiteResult> {
+  return removeSettingImage("ad_mobile_image");
+}
+
+/**
+ * Footer rozet görseli (TÜRSAB, sertifika, ödeme ikonu). DB kolonu yerine
+ * yolu döndürür — çağıran taraf footer_config jsonb'sine ekler. SVG korunur.
+ */
+export async function uploadFooterImage(
+  formData: FormData
+): Promise<FooterImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+  const supabase = await supabaseSession();
+  const stored = await storeImage(supabase, formData.get("file"), "site/footer");
+  if (!stored.ok) return stored;
+  return { ok: true, path: stored.path, url: imageUrl(stored.path) ?? "" };
+}
+
 /**
  * Metin ayarlarını topluca kaydeder. Boş bırakılan alan `null` yazılır ve
  * uygulama o metin için koddaki varsayılana geri döner (bkz. adminSite şeması).
@@ -140,7 +194,7 @@ export async function saveSiteSettings(
 
   const d = parsed.data;
   const supabase = await supabaseSession();
-  const { error } = await supabase.from("site_settings").upsert({
+  const row = {
     id: true,
     hero_video_url: d.heroVideoUrl,
     brand_name: d.brandName,
@@ -162,7 +216,37 @@ export async function saveSiteSettings(
     seo_description_en: d.seoDescriptionEn,
     confirmation_deposit_note: d.confirmationDepositNote,
     confirmation_checkin_note: d.confirmationCheckinNote,
-  });
+    // Ham nesneyi temizleyip tam/normalize edilmiş tercihleri jsonb yaz.
+    villa_detail_prefs: resolveVillaDetailPrefs(d.villaDetailPrefs),
+    ad_show_web: d.adShowWeb,
+    ad_show_mobile: d.adShowMobile,
+    ad_link_url: d.adLinkUrl,
+    header_config: resolveHeaderConfig(d.headerConfig),
+    footer_config: resolveFooterConfig(d.footerConfig),
+  };
+
+  let { error } = await supabase.from("site_settings").upsert(row);
+
+  // Yeni kolonlar (0013/0014/0015) henüz uygulanmadıysa diğer ayarların kaydını
+  // engellememek için bu alanlar olmadan tekrar dene.
+  if (
+    error &&
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_link_url|header_config|footer_config/.test(
+      error.message ?? ""
+    )
+  ) {
+    const {
+      villa_detail_prefs: _p,
+      ad_show_web: _w,
+      ad_show_mobile: _m,
+      ad_link_url: _l,
+      header_config: _h,
+      footer_config: _f,
+      ...rest
+    } = row;
+    void [_p, _w, _m, _l, _h, _f];
+    ({ error } = await supabase.from("site_settings").upsert(rest));
+  }
 
   if (error) return { ok: false, error: "generic" };
 

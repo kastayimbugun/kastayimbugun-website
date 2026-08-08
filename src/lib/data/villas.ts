@@ -174,25 +174,65 @@ export async function getFeatured(): Promise<Villa[]> {
 }
 
 export interface Region {
+  id: string;
   slug: string;
   name: string;
   province: string;
+  parentId: string | null;
+  parentSlug: string | null;
+  parentName: string | null;
+  depth: number;
   /** Bölge kartı görseli. Panelden yüklenmediyse null — kart o zaman bölgedeki
    *  bir villanın fotoğrafına düşer (bkz. HomeClient). */
   heroImage: string | null;
 }
 
 export async function getRegions(): Promise<Region[]> {
-  const { data, error } = await supabaseServer()
+  const supabase = supabaseServer();
+  const { data, error } = await supabase
     .from("regions")
-    .select("slug, name, province, hero_image")
+    .select("id, slug, name, province, parent_id, depth, hero_image")
     .order("sort_order");
 
-  if (error) throw new Error(`Bölgeler okunamadı: ${error.message}`);
-  return data.map((r) => ({
-    slug: r.slug,
-    name: r.name,
-    province: r.province,
-    heroImage: imageUrl(r.hero_image),
-  }));
+  if (error) {
+    // Sütunlar henüz migration uygulanmadığı için yoksa fallback yap
+    if (error.message.includes("parent_id")) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("regions")
+        .select("id, slug, name, province, hero_image")
+        .order("sort_order");
+
+      if (fallbackError) throw new Error(`Bölgeler okunamadı: ${fallbackError.message}`);
+      return (fallbackData ?? []).map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        province: r.province,
+        parentId: null,
+        parentSlug: null,
+        parentName: null,
+        depth: 0,
+        heroImage: imageUrl(r.hero_image),
+      }));
+    }
+    throw new Error(`Bölgeler okunamadı: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const map = new Map(rows.map((r) => [r.id, r]));
+
+  return rows.map((r) => {
+    const parent = r.parent_id ? map.get(r.parent_id) : null;
+    return {
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      province: parent ? parent.name : r.province,
+      parentId: r.parent_id ?? null,
+      parentSlug: parent ? parent.slug : null,
+      parentName: parent ? parent.name : null,
+      depth: r.depth ?? 0,
+      heroImage: imageUrl(r.hero_image),
+    };
+  });
 }

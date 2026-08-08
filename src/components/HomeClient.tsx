@@ -9,6 +9,9 @@ import {
   Headphones,
   BadgePercent,
   ArrowRight,
+  MapPin,
+  Star,
+  Home,
 } from "lucide-react";
 import HeroMedia from "@/components/HeroMedia";
 import SearchBar from "@/components/SearchBar";
@@ -45,7 +48,7 @@ export default function HomeClient({
     { icon: BadgePercent, title: t("home.why4Title"), desc: t("home.why4Desc") },
   ];
 
-  const featuredCategories = categories.filter((c) => c.featuredOnHome);
+  const featuredCategories = categories.filter((c) => c.featuredOnHome === true);
 
   const inRegion = (name: string) => villas.filter((v) => v.region === name);
   const regionCount = (name: string) => inRegion(name).length;
@@ -91,10 +94,14 @@ export default function HomeClient({
       </section>
 
       {/* CATEGORY BROWSER */}
-      <CategoryBrowser categories={categories} />
+      <CategoryBrowser categories={categories.filter((c) => c.showInBrowser !== false)} />
 
-      {/* REKLAM ALANI (web: yatay · mobil: dikey) */}
-      <AdBanner />
+      {/* REKLAM ALANI — web/mobil ayrı görsel, panelden yönetilir */}
+      <AdBanner
+        web={site.adShowWeb ? site.adWebImage : null}
+        mobile={site.adShowMobile ? site.adMobileImage : null}
+        link={site.adLinkUrl || "/villalar"}
+      />
 
       {/* FEATURED */}
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -133,7 +140,7 @@ export default function HomeClient({
       ))}
 
       {/* REGIONS */}
-      <section id="regions" className="bg-sand-50 py-10">
+      <section id="regions" className="bg-sand-50 py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="text-center">
             <h2 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">
@@ -142,37 +149,64 @@ export default function HomeClient({
             <p className="mt-2 text-brand-900/60">{t("home.regionsSub")}</p>
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {regions.map((r, i) => (
-              <Link
-                key={r.slug}
-                href={`/villalar?region=${encodeURIComponent(r.name)}`}
-                className="group relative aspect-[16/10] overflow-hidden rounded-2xl bg-brand-800"
-              >
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {regions.map((r, i) => {
+              const href = r.parentSlug
+                ? `/villalar/${r.parentSlug}/${r.slug}`
+                : `/villalar/${r.slug}`;
+              return (
+                <Link
+                  key={r.slug}
+                  href={href}
+                  className="group relative aspect-[16/11] overflow-hidden rounded-3xl bg-brand-800 shadow-sm ring-1 ring-black/5 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl"
+                >
                 {regionImage(r) && (
                   <Image
                     src={regionImage(r)!}
                     alt={r.name}
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-cover transition duration-500 group-hover:scale-110"
+                    className="object-cover transition duration-700 ease-out group-hover:scale-110"
                   />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-brand-950/80 via-transparent to-transparent" />
-                <div className="absolute bottom-0 left-0 p-5">
-                  <h3 className="text-xl font-bold text-white">{r.name}</h3>
-                  <p className="text-sm text-brand-100">
-                    {r.province} · {regionCount(r.name)}{" "}
-                    {lang === "tr" ? "villa" : "villas"}
-                  </p>
-                </div>
+                {/* Katmanlı karartma — alt köşe okunaklı, hover'da hafif koyulaşır */}
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-950 via-brand-950/25 to-transparent" />
+                <div className="absolute inset-0 bg-brand-950/0 transition duration-300 group-hover:bg-brand-950/10" />
+
+                {/* Villa sayısı — cam rozet */}
+                <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur-md">
+                  <Home className="h-3.5 w-3.5" />
+                  {regionCount(r.name)} {lang === "tr" ? "villa" : "villas"}
+                </span>
+
+                {/* Popüler rozeti */}
                 {i === 0 && (
-                  <span className="absolute right-4 top-4 rounded-full bg-sun-500 px-2.5 py-1 text-xs font-bold text-white">
+                  <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-sun-400 to-sun-600 px-3 py-1 text-xs font-bold text-white shadow-md">
+                    <Star className="h-3.5 w-3.5 fill-white" />
                     {lang === "tr" ? "Popüler" : "Popular"}
                   </span>
                 )}
+
+                {/* Alt bilgi + keşfet oku */}
+                <div className="absolute inset-x-0 bottom-0 p-5">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-xl font-extrabold text-white drop-shadow-sm sm:text-2xl">
+                        {r.name}
+                      </h3>
+                      <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-white/85">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        {r.province}
+                      </p>
+                    </div>
+                    <span className="flex h-10 w-10 shrink-0 translate-y-2 items-center justify-center rounded-full bg-white/95 text-brand-900 opacity-0 shadow-lg transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                      <ArrowRight className="h-5 w-5" />
+                    </span>
+                  </div>
+                </div>
               </Link>
-            ))}
+            );
+          })}
           </div>
         </div>
       </section>

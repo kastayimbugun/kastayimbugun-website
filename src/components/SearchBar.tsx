@@ -84,15 +84,44 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
     const p = new URLSearchParams();
     if (mode === "name") {
       if (name) p.set("q", name);
+      router.push(`/villalar?${p.toString()}`);
     } else {
-      if (region) p.set("region", region);
       if (checkIn) p.set("in", checkIn);
       if (checkOut) p.set("out", checkOut);
       const total = guests.adults + guests.children;
       if (total) p.set("guests", String(total));
       if (guests.babies) p.set("babies", String(guests.babies));
+
+      // Hiyerarşik URL yönlendirmesi
+      if (region) {
+        // region slug veya full path olabilir
+        if (region.includes("/")) {
+          const queryString = p.toString() ? `?${p.toString()}` : "";
+          router.push(`/villalar/${region}${queryString}`);
+          return;
+        }
+
+        const selectedReg = regions.find((r) => r.slug === region || r.name === region);
+        if (selectedReg) {
+          // Hiyerarşik yolu oluştur (İl / İlçe / Bölge)
+          const pathSegments: string[] = [selectedReg.slug];
+          let curr = selectedReg;
+          const regMap = new Map(regions.map((r) => [r.id, r]));
+
+          while (curr.parentId && regMap.has(curr.parentId)) {
+            const parent = regMap.get(curr.parentId)!;
+            pathSegments.unshift(parent.slug);
+            curr = parent;
+          }
+
+          const hierarchicalPath = pathSegments.join("/");
+          const queryString = p.toString() ? `?${p.toString()}` : "";
+          router.push(`/villalar/${hierarchicalPath}${queryString}`);
+          return;
+        }
+      }
+      router.push(`/villalar?${p.toString()}`);
     }
-    router.push(`/villalar?${p.toString()}`);
   };
 
   const inputCls =
@@ -201,11 +230,66 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
                   className={inputCls}
                 >
                   <option value="">{t("search.regionPh")}</option>
-                  {regions.map((r) => (
-                    <option key={r.slug} value={r.name}>
-                      {r.name}, {r.province}
-                    </option>
-                  ))}
+                  {(() => {
+                    const regMap = new Map(regions.map((r) => [r.id, r]));
+                    const childMap = new Map<string, Region[]>();
+
+                    regions.forEach((r) => {
+                      if (r.parentId) {
+                        const list = childMap.get(r.parentId) ?? [];
+                        list.push(r);
+                        childMap.set(r.parentId, list);
+                      }
+                    });
+
+                    const cities = regions.filter((r) => !r.parentId || r.depth === 0);
+
+                    return cities.map((city) => {
+                      const districts = childMap.get(city.id) ?? [];
+
+                      if (districts.length === 0) {
+                        return (
+                          <option key={city.slug} value={city.slug}>
+                            {city.name}
+                          </option>
+                        );
+                      }
+
+                      return (
+                        <optgroup key={city.slug} label={city.name}>
+                          <option value={city.slug}>{city.name} (Tüm Bölgeler)</option>
+                          {districts.map((district) => {
+                            const neighborhoods = childMap.get(district.id) ?? [];
+                            const districtPath = `${city.slug}/${district.slug}`;
+
+                            if (neighborhoods.length === 0) {
+                              return (
+                                <option key={district.slug} value={districtPath}>
+                                  &nbsp;&nbsp;↳ {district.name}
+                                </option>
+                              );
+                            }
+
+                            return (
+                              <optgroup key={district.slug} label={`── ${district.name}`}>
+                                <option value={districtPath}>
+                                  {district.name} (Tüm İlçe)
+                                </option>
+                                {neighborhoods.map((n) => (
+                                  <option
+                                    key={n.slug}
+                                    value={`${districtPath}/${n.slug}`}
+                                  >
+                                    &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            );
+                          })}
+                        </optgroup>
+                      );
+                    });
+                  })()}
                 </select>
               </Segment>
 

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getAdminRegion } from "@/lib/data/admin/regions";
+import { getAdminRegion, getRegionParentOptions } from "@/lib/data/admin/regions";
 import RegionForm from "@/components/admin/RegionForm";
 import DeleteRegionButton from "@/components/admin/DeleteRegionButton";
 import { PageHeader, BackLink } from "@/components/admin/ui/PageHeader";
@@ -12,7 +12,11 @@ export default async function BolgeDetayPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const region = await getAdminRegion(id);
+  const [region, parentOptions] = await Promise.all([
+    getAdminRegion(id),
+    getRegionParentOptions(),
+  ]);
+
   if (!region) notFound();
 
   return (
@@ -22,7 +26,7 @@ export default async function BolgeDetayPage({
       <div className="mt-3">
         <PageHeader
           title={region.name}
-          description={`${region.province} · ${region.villaCount} villa`}
+          description={`${region.province || "Konum"} · ${region.villaCount} villa`}
           actions={
             <DeleteRegionButton
               id={region.id}
@@ -34,7 +38,7 @@ export default async function BolgeDetayPage({
       </div>
 
       <div className="mt-5">
-        <RegionForm region={region} mode="edit" />
+        <RegionForm region={region} mode="edit" parentOptions={parentOptions} />
       </div>
     </div>
   );

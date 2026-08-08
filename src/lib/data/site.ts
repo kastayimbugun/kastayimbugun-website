@@ -1,6 +1,19 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { imageUrl } from "@/lib/images/url";
+import {
+  resolveVillaDetailPrefs,
+  DEFAULT_VILLA_DETAIL_PREFS,
+  type VillaDetailPrefs,
+} from "@/lib/villaDetailPrefs";
+import {
+  resolveHeaderConfig,
+  resolveFooterConfig,
+  DEFAULT_HEADER_CONFIG,
+  DEFAULT_FOOTER_CONFIG,
+  type HeaderConfig,
+  type FooterConfig,
+} from "@/lib/headerFooter";
 
 /**
  * Site geneli ayarlar (`site_settings` tek satır) — herkese açık okuma.
@@ -31,6 +44,16 @@ export interface SiteSettings {
   seoTitleEn: string | null;
   seoDescriptionTr: string | null;
   seoDescriptionEn: string | null;
+  /** Villa detay sayfası görünürlük tercihleri — hep çözümlenmiş (tam) nesne. */
+  villaDetailPrefs: VillaDetailPrefs;
+  /** Reklam bandı — platform kapalıysa ya da görseli yoksa o platformda gösterilmez. */
+  adShowWeb: boolean;
+  adShowMobile: boolean;
+  adWebImage: string | null;
+  adMobileImage: string | null;
+  adLinkUrl: string | null;
+  headerConfig: HeaderConfig;
+  footerConfig: FooterConfig;
 }
 
 const EMPTY: SiteSettings = {
@@ -55,23 +78,45 @@ const EMPTY: SiteSettings = {
   seoTitleEn: null,
   seoDescriptionTr: null,
   seoDescriptionEn: null,
+  villaDetailPrefs: DEFAULT_VILLA_DETAIL_PREFS,
+  adShowWeb: false,
+  adShowMobile: false,
+  adWebImage: null,
+  adMobileImage: null,
+  adLinkUrl: null,
+  headerConfig: DEFAULT_HEADER_CONFIG,
+  footerConfig: DEFAULT_FOOTER_CONFIG,
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-  const { data, error } = await supabaseServer()
-    .from("site_settings")
-    .select(
-      `hero_image, hero_video_url, logo_image, og_image,
+  const base = `hero_image, hero_video_url, logo_image, og_image,
        brand_name, agency_name, tursab_no,
        phone, whatsapp, email, address, instagram_url, facebook_url,
        hero_title_tr, hero_title_en, hero_subtitle_tr, hero_subtitle_en,
-       seo_title_tr, seo_title_en, seo_description_tr, seo_description_en`
-    )
+       seo_title_tr, seo_title_en, seo_description_tr, seo_description_en`;
+
+  const extended = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config`;
+
+  let q = await supabaseServer()
+    .from("site_settings")
+    .select(extended)
     .maybeSingle();
 
+  // Yeni kolonlar (0013/0014/0015) yoksa diğer tüm ayarları kaybetmemek için
+  // minimal şemayla tekrar dene.
+  if (
+    q.error &&
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config/.test(
+      q.error.message ?? ""
+    )
+  ) {
+    q = await supabaseServer().from("site_settings").select(base).maybeSingle();
+  }
+
+  const { data, error } = q;
   if (error || !data) return EMPTY;
 
-  const r = data as Record<string, string | null>;
+  const r = data as Record<string, unknown> & Record<string, string | null>;
 
   return {
     heroImage: imageUrl(r.hero_image),
@@ -95,5 +140,13 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     seoTitleEn: r.seo_title_en || null,
     seoDescriptionTr: r.seo_description_tr || null,
     seoDescriptionEn: r.seo_description_en || null,
+    villaDetailPrefs: resolveVillaDetailPrefs(r.villa_detail_prefs),
+    adShowWeb: Boolean(r.ad_show_web),
+    adShowMobile: Boolean(r.ad_show_mobile),
+    adWebImage: imageUrl(r.ad_web_image as string | null),
+    adMobileImage: imageUrl(r.ad_mobile_image as string | null),
+    adLinkUrl: (r.ad_link_url as string | null) || null,
+    headerConfig: resolveHeaderConfig(r.header_config),
+    footerConfig: resolveFooterConfig(r.footer_config),
   };
 }

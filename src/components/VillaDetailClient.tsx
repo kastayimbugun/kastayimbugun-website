@@ -9,6 +9,7 @@ import {
   Bath,
   Ruler,
   Waves,
+  Droplets,
   Clock,
   Moon,
   ChevronDown,
@@ -24,14 +25,24 @@ import { rangeHasConflict } from "@/lib/availability";
 import { amenityIcons } from "@/lib/amenityIcons";
 import { villaDistances } from "@/lib/distances";
 import type { Villa } from "@/lib/types";
+import {
+  DEFAULT_VILLA_DETAIL_PREFS,
+  type VillaDetailPrefs,
+} from "@/lib/villaDetailPrefs";
 
 export default function VillaDetailClient({
   villa,
   otherVillas = [],
+  prefs = DEFAULT_VILLA_DETAIL_PREFS,
+  categoryVillas,
 }: {
   villa: Villa;
   /** Benzer villalar bölümü için — sunucudan gelir */
   otherVillas?: Villa[];
+  /** Site geneli görünürlük tercihleri */
+  prefs?: VillaDetailPrefs;
+  /** "Benzer Villalar" kategori modundaysa önceden çözülmüş villalar */
+  categoryVillas?: Villa[];
 }) {
   const { t, lang, amenity } = useI18n();
   const [checkIn, setCheckIn] = useState<string | null>(null);
@@ -67,37 +78,80 @@ export default function VillaDetailClient({
     calendarRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
 
   const description = lang === "tr" ? villa.descriptionTr : villa.descriptionEn;
-  // Önce aynı bölgedekiler, sonra diğerleri
-  const similar = otherVillas
-    .filter((v) => v.slug !== villa.slug && v.region === villa.region)
-    .concat(
-      otherVillas.filter((v) => v.slug !== villa.slug && v.region !== villa.region)
-    )
-    .slice(0, 3);
 
+  // "Benzer Villalar" kaynağı: kategori modunda önceden çözülmüş liste, aksi halde
+  // önce aynı bölgedekiler sonra diğerleri. "off" modunda bölüm hiç gösterilmez.
+  const similarSource =
+    prefs.similar.mode === "category"
+      ? (categoryVillas ?? [])
+      : otherVillas
+          .filter((v) => v.slug !== villa.slug && v.region === villa.region)
+          .concat(
+            otherVillas.filter(
+              (v) => v.slug !== villa.slug && v.region !== villa.region
+            )
+          );
+  const similar = similarSource.filter((v) => v.slug !== villa.slug).slice(0, 3);
+
+  // Bir kutu gösterilir: admin kapatmamış (prefs) VE veri girilmiş (0 değil).
   const facts = [
-    {
+    prefs.facts.capacity && villa.capacity > 0 && {
       icon: Users,
       label: t("card.guests"),
       value: `${villa.capacity} ${t("card.person")}`,
     },
-    {
+    prefs.facts.bedrooms && villa.bedrooms > 0 && {
       icon: BedDouble,
       label: t("card.bedroom"),
       value: `${villa.bedrooms} ${t("card.bedrooms")}`,
     },
-    {
+    prefs.facts.bathrooms && villa.bathrooms > 0 && {
       icon: Bath,
       label: t("card.bath"),
       value: `${villa.bathrooms} ${t("card.bath")}`,
     },
-    { icon: Ruler, label: t("detail.area"), value: `${villa.size} m²` },
-    {
+    prefs.facts.size && villa.size > 0 && {
+      icon: Ruler,
+      label: t("detail.area"),
+      value: `${villa.size} m²`,
+    },
+    prefs.facts.distanceToSea && villa.distanceToSea > 0 && {
       icon: Waves,
       label: t("card.toSea"),
       value: `${villa.distanceToSea} m`,
     },
-  ];
+    prefs.facts.pool && villa.pool !== "none" && {
+      icon: Droplets,
+      label: lang === "tr" ? "Havuz" : "Pool",
+      value:
+        villa.pool === "private"
+          ? lang === "tr"
+            ? "Özel"
+            : "Private"
+          : lang === "tr"
+          ? "Ortak"
+          : "Shared",
+    },
+    prefs.facts.rating && villa.rating > 0 && {
+      icon: Star,
+      label: lang === "tr" ? "Puan" : "Rating",
+      value: villa.rating.toFixed(1),
+    },
+    prefs.facts.minNights && villa.minNights > 0 && {
+      icon: Moon,
+      label: lang === "tr" ? "Min. Konaklama" : "Min. Stay",
+      value: `${villa.minNights} ${t("detail.nights")}`,
+    },
+    prefs.facts.checkInOut && villa.checkIn && villa.checkOut && {
+      icon: Clock,
+      label: lang === "tr" ? "Giriş / Çıkış" : "Check-in / out",
+      value: `${villa.checkIn} / ${villa.checkOut}`,
+    },
+  ].filter(Boolean) as {
+    icon: typeof Users;
+    label: string;
+    value: string;
+  }[];
 
   const dists = villaDistances(villa, lang);
   const visibleDists = showAllDist ? dists : dists.slice(0, 6);
@@ -126,12 +180,14 @@ export default function VillaDetailClient({
         </div>
       </div>
 
-      {/* Facts — tam genişlik */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+      {/* Facts — dinamik: kutu sayısına göre satırlar tam genişliği kaplar.
+          flex-wrap + flex-1/basis: her satırdaki kutular eşit büyür (5 → 3+2,
+          6 → 3+3, taşan alt satıra iner ve yine satırı doldurur). */}
+      <div className="mt-6 flex flex-wrap gap-3">
         {facts.map((f) => (
           <div
             key={f.label}
-            className="rounded-xl border border-sand-200 bg-sand-50 p-4 text-center"
+            className="flex-1 basis-[45%] rounded-xl border border-sand-200 bg-sand-50 p-4 text-center sm:basis-[150px]"
           >
             <f.icon className="mx-auto h-6 w-6 text-brand-500" />
             <div className="mt-2 text-xs font-medium text-brand-900/55">
@@ -149,24 +205,35 @@ export default function VillaDetailClient({
         <div className="min-w-0 flex-1 space-y-10">
 
           {/* Overview */}
+          {prefs.sections.overview && (
           <section>
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.overview")}
             </h2>
-            <p className="mt-3 leading-relaxed text-brand-900/75">{description}</p>
+            {description && (
+              <p className="mt-3 leading-relaxed text-brand-900/75">
+                {description}
+              </p>
+            )}
             <div className="mt-4 flex flex-wrap gap-4 text-sm">
-              <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-800">
-                <Clock className="h-4 w-4" />
-                {t("detail.checkInOut")}: {villa.checkIn} / {villa.checkOut}
-              </span>
-              <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-800">
-                <Moon className="h-4 w-4" />
-                {t("detail.minNights")}: {villa.minNights} {t("detail.nights")}
-              </span>
+              {villa.checkIn && villa.checkOut && (
+                <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-800">
+                  <Clock className="h-4 w-4" />
+                  {t("detail.checkInOut")}: {villa.checkIn} / {villa.checkOut}
+                </span>
+              )}
+              {villa.minNights > 0 && (
+                <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 font-medium text-brand-800">
+                  <Moon className="h-4 w-4" />
+                  {t("detail.minNights")}: {villa.minNights} {t("detail.nights")}
+                </span>
+              )}
             </div>
           </section>
+          )}
 
           {/* Amenities */}
+          {prefs.sections.amenities && villa.amenities.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.amenities")}
@@ -188,8 +255,10 @@ export default function VillaDetailClient({
               })}
             </div>
           </section>
+          )}
 
           {/* Availability */}
+          {prefs.sections.availability && (
           <section ref={calendarRef} className="scroll-mt-32">
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.availability")}
@@ -205,8 +274,10 @@ export default function VillaDetailClient({
               />
             </div>
           </section>
+          )}
 
           {/* Uzaklıklar */}
+          {prefs.sections.distances && dists.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.distances")}
@@ -250,9 +321,10 @@ export default function VillaDetailClient({
               </button>
             )}
           </section>
+          )}
 
           {/* Video */}
-          {villa.videoUrl && (
+          {prefs.sections.video && villa.videoUrl && (
             <section>
               <h2 className="text-xl font-bold text-brand-950">
                 {t("detail.video")}
@@ -270,6 +342,7 @@ export default function VillaDetailClient({
           )}
 
           {/* Price table */}
+          {prefs.sections.priceTable && villa.seasons.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.priceTable")}
@@ -310,8 +383,10 @@ export default function VillaDetailClient({
               </table>
             </div>
           </section>
+          )}
 
           {/* Location */}
+          {prefs.sections.location && (
           <section>
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.location")}
@@ -330,12 +405,15 @@ export default function VillaDetailClient({
                 <div className="mt-2 font-bold text-brand-900">
                   {villa.region}, {villa.province}
                 </div>
-                <div className="text-sm text-brand-900/60">
-                  {t("card.toSea")}: {villa.distanceToSea} m
-                </div>
+                {villa.distanceToSea > 0 && (
+                  <div className="text-sm text-brand-900/60">
+                    {t("card.toSea")}: {villa.distanceToSea} m
+                  </div>
+                )}
               </div>
             </div>
           </section>
+          )}
         </div>
 
         {/* RIGHT — sticky booking */}
@@ -353,17 +431,19 @@ export default function VillaDetailClient({
         </div>
       </div>
 
-      {/* Similar */}
-      <section className="mt-16">
-        <h2 className="text-2xl font-extrabold text-brand-950">
-          {t("detail.similar")}
-        </h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {similar.map((v) => (
-            <VillaCard key={v.slug} villa={v} />
-          ))}
-        </div>
-      </section>
+      {/* Similar — "off" modunda ya da uygun villa yoksa hiç gösterilmez */}
+      {prefs.similar.mode !== "off" && similar.length > 0 && (
+        <section className="mt-16">
+          <h2 className="text-2xl font-extrabold text-brand-950">
+            {t("detail.similar")}
+          </h2>
+          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {similar.map((v) => (
+              <VillaCard key={v.slug} villa={v} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

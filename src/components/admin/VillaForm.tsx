@@ -18,6 +18,7 @@ import { useUnsavedGuard } from "@/components/admin/ui/useUnsavedGuard";
 import { inputCls } from "@/components/admin/ui/styles";
 import type { AdminVillaFull } from "@/lib/data/admin/villas";
 import type { RegionOption } from "@/lib/data/admin/regions";
+import CascadeRegionSelect from "@/components/admin/CascadeRegionSelect";
 
 type FormState = {
   name: string;
@@ -286,18 +287,12 @@ export default function VillaForm({
             />
           </Field>
           <Field label="Bölge" required error={errors.regionId}>
-            <select
-              className={inputCls}
+            <CascadeRegionSelect
+              regions={regions}
               value={f.regionId}
-              onChange={(e) => set("regionId", e.target.value)}
-            >
-              <option value="">Seçin…</option>
-              {regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}, {r.province}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => set("regionId", id)}
+              error={errors.regionId}
+            />
           </Field>
           <Field
             label="Durum"

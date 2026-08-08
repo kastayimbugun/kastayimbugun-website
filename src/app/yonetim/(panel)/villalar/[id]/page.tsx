@@ -14,6 +14,8 @@ import BlockEditor from "@/components/admin/BlockEditor";
 import { PageHeader, BackLink } from "@/components/admin/ui/PageHeader";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
 
+import DeleteVillaButton from "@/components/admin/DeleteVillaButton";
+
 export const dynamic = "force-dynamic";
 
 export default async function VillaDetayPage({
@@ -57,6 +59,9 @@ export default async function VillaDetayPage({
                 Sitede gör <ExternalLink className="h-3.5 w-3.5" />
               </Link>
             </>
+          }
+          actions={
+            <DeleteVillaButton villaId={full.id} villaName={full.name} />
           }
         />
       </div>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Star, CalendarCheck, Loader2 } from "lucide-react";
+import { CalendarCheck, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice, formatDateShort, toISO } from "@/lib/format";
 import { rangeHasConflict } from "@/lib/availability";
@@ -123,21 +123,12 @@ export default function BookingBox({
 
   return (
     <div className="rounded-2xl border border-sand-200 bg-white p-5">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <span className="text-2xl font-extrabold text-brand-800">
-            {formatPrice(villa.pricePerNight, lang)}
-          </span>
-          <span className="ml-1 text-sm text-brand-900/60">
-            / {t("card.perNight")}
-          </span>
-        </div>
-        <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-900">
-          <Star className="h-4 w-4 fill-sun-400 text-sun-400" />
-          {villa.rating.toFixed(1)}
-          <span className="font-normal text-brand-900/50">
-            ({villa.reviewCount})
-          </span>
+      <div className="flex items-baseline">
+        <span className="text-2xl font-extrabold text-brand-800">
+          {formatPrice(villa.pricePerNight, lang)}
+        </span>
+        <span className="ml-1 text-sm text-brand-900/60">
+          / {t("card.perNight")}
         </span>
       </div>
 
