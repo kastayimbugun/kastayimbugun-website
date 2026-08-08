@@ -20,10 +20,14 @@ export type StoreResult =
  *
  * GÜVENLİK: yetkiyi ÇAĞIRAN action doğrular — bu yardımcı kontrol yapmaz.
  */
+/** `<img src>` ile gösterilse bile riskli olabilecek SVG kalıpları. */
+const SVG_DANGER = /<script|<foreignObject|<!ENTITY|\son\w+\s*=|javascript:/i;
+
 export async function storeImage(
   supabase: SupabaseClient,
   file: unknown,
-  pathBase: string
+  pathBase: string,
+  animated = false
 ): Promise<StoreResult> {
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "validation" };
@@ -31,7 +35,26 @@ export async function storeImage(
   if (!file.type.startsWith("image/")) return { ok: false, error: "type" };
   if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: "toobig" };
 
-  const processed = await processImage(file);
+  // SVG'yi sharp'a sokma (vektör kaybolur). Tehlikeli içerik taşıyorsa reddet,
+  // temizse ham sakla — reklam/rozet logoları (TÜRSAB, ödeme ikonları) için.
+  const isSvg =
+    file.type === "image/svg+xml" ||
+    file.name.toLowerCase().endsWith(".svg");
+  if (isSvg) {
+    const text = await file.text();
+    if (SVG_DANGER.test(text)) return { ok: false, error: "type" };
+    const path = `${pathBase}-${Date.now().toString(36)}.svg`;
+    const { error } = await supabase.storage
+      .from(IMAGE_BUCKET)
+      .upload(path, Buffer.from(text, "utf8"), {
+        contentType: "image/svg+xml",
+        upsert: true,
+      });
+    if (error) return { ok: false, error: "generic" };
+    return { ok: true, path, width: 0, height: 0 };
+  }
+
+  const processed = await processImage(file, undefined, animated);
   if (!processed) return { ok: false, error: "type" };
 
   const path = `${pathBase}-${Date.now().toString(36)}.${processed.ext}`;

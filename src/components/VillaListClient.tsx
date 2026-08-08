@@ -28,10 +28,14 @@ export default function VillaListClient({
   villas,
   regions,
   categories,
+  initialCitySlug,
+  initialRegionSlug,
 }: {
   villas: Villa[];
   regions: Region[];
   categories: Category[];
+  initialCitySlug?: string;
+  initialRegionSlug?: string;
 }) {
   const { t, lang, amenity } = useI18n();
   const params = useSearchParams();
@@ -40,7 +44,27 @@ export default function VillaListClient({
   const categorySlug = params.get("category");
   const category = categories.find((c) => c.slug === categorySlug) ?? null;
 
-  const [region, setRegion] = useState(params.get("region") ?? "");
+  // Başlangıç bölgesi: props veya searchParams
+  const initialSelectedRegion = useMemo(() => {
+    if (initialRegionSlug) {
+      const found = regions.find((r) => r.slug === initialRegionSlug);
+      return found?.slug ?? initialRegionSlug;
+    }
+    if (initialCitySlug) {
+      const found = regions.find((r) => r.slug === initialCitySlug);
+      return found?.slug ?? initialCitySlug;
+    }
+    const queryRegion = params.get("region");
+    if (queryRegion) {
+      const found = regions.find(
+        (r) => r.slug === queryRegion || r.name === queryRegion
+      );
+      return found?.slug ?? queryRegion;
+    }
+    return "";
+  }, [initialCitySlug, initialRegionSlug, params, regions]);
+
+  const [region, setRegion] = useState(initialSelectedRegion);
   const [q, setQ] = useState(params.get("q") ?? "");
   const [minGuests, setMinGuests] = useState(Number(params.get("guests")) || 0);
   const [minBeds, setMinBeds] = useState(0);
@@ -66,9 +90,46 @@ export default function VillaListClient({
   const results = useMemo(() => {
     const inCategory = category ? new Set(category.villaSlugs) : null;
 
+    const selectedRegionObj = region
+      ? regions.find((r) => r.slug === region || r.name === region)
+      : null;
+
+    // Seçilen konum ve varsa altındaki tüm alt konumların isim/slug set'leri
+    const matchedLocationNames = new Set<string>();
+    const matchedLocationSlugs = new Set<string>();
+
+    if (selectedRegionObj) {
+      matchedLocationNames.add(selectedRegionObj.name);
+      matchedLocationSlugs.add(selectedRegionObj.slug);
+
+      // Recursive veya childMap ile alt düğümleri topla
+      const collectChildren = (parentId: string) => {
+        regions.forEach((r) => {
+          if (r.parentId === parentId) {
+            matchedLocationNames.add(r.name);
+            matchedLocationSlugs.add(r.slug);
+            collectChildren(r.id);
+          }
+        });
+      };
+
+      collectChildren(selectedRegionObj.id);
+    }
+
     const list = villas.filter((v) => {
       if (inCategory && !inCategory.has(v.slug)) return false;
-      if (region && v.region !== region) return false;
+
+      if (selectedRegionObj) {
+        const matches =
+          matchedLocationNames.has(v.region) ||
+          matchedLocationSlugs.has(v.region) ||
+          matchedLocationNames.has(v.province);
+
+        if (!matches) return false;
+      } else if (region) {
+        if (v.region !== region && v.province !== region) return false;
+      }
+
       if (q && !v.name.toLowerCase().includes(q.toLowerCase())) return false;
       if (minGuests && v.capacity < minGuests) return false;
       if (minBeds && v.bedrooms < minBeds) return false;
@@ -125,11 +186,54 @@ export default function VillaListClient({
           className="w-full rounded-xl border border-sand-200 bg-white py-2.5 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
         >
           <option value="">{t("filter.allRegions")}</option>
-          {regions.map((r) => (
-            <option key={r.slug} value={r.name}>
-              {r.name}
-            </option>
-          ))}
+          {(() => {
+            const childMap = new Map<string, Region[]>();
+
+            regions.forEach((r) => {
+              if (r.parentId) {
+                const list = childMap.get(r.parentId) ?? [];
+                list.push(r);
+                childMap.set(r.parentId, list);
+              }
+            });
+
+            const cities = regions.filter((r) => !r.parentId || r.depth === 0);
+
+            return cities.map((city) => {
+              const districts = childMap.get(city.id) ?? [];
+
+              if (districts.length === 0) {
+                return (
+                  <option key={city.slug} value={city.slug}>
+                    {city.name}
+                  </option>
+                );
+              }
+
+              return (
+                <optgroup key={city.slug} label={city.name}>
+                  <option value={city.slug}>{city.name} (Tüm Bölgeler)</option>
+                  {districts.flatMap((district) => {
+                    const neighborhoods = childMap.get(district.id) ?? [];
+
+                    const districtOption = (
+                      <option key={district.slug} value={district.slug}>
+                        &nbsp;&nbsp;↳ {district.name} {neighborhoods.length > 0 ? "(Tüm İlçe)" : ""}
+                      </option>
+                    );
+
+                    const neighborhoodOptions = neighborhoods.map((n) => (
+                      <option key={n.slug} value={n.slug}>
+                        &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
+                      </option>
+                    ));
+
+                    return [districtOption, ...neighborhoodOptions];
+                  })}
+                </optgroup>
+              );
+            });
+          })()}
         </select>
       </div>
 

@@ -19,7 +19,7 @@ import { Field } from "@/components/admin/ui/FormField";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
 import BookingStatusSelect from "@/components/admin/BookingStatusSelect";
 import { inputCls, btnPrimary, btnSecondary } from "@/components/admin/ui/styles";
-import { formatDateShort, formatDateTime, formatPrice } from "@/lib/format";
+import { formatDateRange, formatDateTime, formatPrice } from "@/lib/format";
 import { waitingBadge } from "@/lib/bookingWaiting";
 import type { AdminBooking } from "@/lib/data/admin/bookings";
 
@@ -107,10 +107,16 @@ export default function BookingRow({ booking: r }: { booking: AdminBooking }) {
           )}
         </div>
         <div className="text-sm text-brand-900/70">
-          {formatDateShort(r.checkIn)} – {formatDateShort(r.checkOut)} ·{" "}
-          {r.nights} gece
+          {formatDateRange(r.checkIn, r.checkOut)} · {r.nights} gece
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <Link
+            href={`/yonetim/talepler/${r.id}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+          >
+            <Pencil className="h-3 w-3" />
+            Detay / düzenle
+          </Link>
           {r.villaId && (
             <Link
               href={`/yonetim/villalar/${r.villaId}`}

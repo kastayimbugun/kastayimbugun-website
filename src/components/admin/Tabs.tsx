@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export interface TabItem {
   id: string;
@@ -11,13 +12,38 @@ export interface TabItem {
 /**
  * Erişilebilir sekme grubu: `role="tablist"/"tab"/"tabpanel"`, `aria-selected`,
  * `aria-controls` ve ok tuşlarıyla gezinme (WAI-ARIA sekme deseni).
- * Önceki sürüm süslü butonlardan ibaretti; ekran okuyucu sekme olduğunu
- * anlamıyor, klavyeyle gezinilemiyordu.
+ *
+ * `paramKey` verilirse aktif sekme URL'de tutulur (ör. ?sekme=images) —
+ * sayfa yenilenince veya bağlantı paylaşılınca sekme korunur (yol haritası 4.4).
  */
-export default function Tabs({ tabs }: { tabs: TabItem[] }) {
+export default function Tabs({
+  tabs,
+  paramKey,
+}: {
+  tabs: TabItem[];
+  paramKey?: string;
+}) {
   const base = useId();
-  const [active, setActive] = useState(tabs[0]?.id);
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  // URL'deki sekme geçerliyse onu, değilse ilk sekmeyi kullan.
+  const fromUrl = paramKey ? params.get(paramKey) : null;
+  const initial =
+    fromUrl && tabs.some((t) => t.id === fromUrl) ? fromUrl : tabs[0]?.id;
+  const [active, setActive] = useState(initial);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const select = (id: string) => {
+    setActive(id);
+    if (paramKey) {
+      const next = new URLSearchParams(params.toString());
+      next.set(paramKey, id);
+      // scroll:false — sekme değişince sayfa başa zıplamasın.
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    }
+  };
 
   const tabId = (id: string) => `${base}-tab-${id}`;
   const panelId = (id: string) => `${base}-panel-${id}`;
@@ -36,7 +62,7 @@ export default function Tabs({ tabs }: { tabs: TabItem[] }) {
           ? tabs.length - 1
           : (current + dir + tabs.length) % tabs.length;
 
-    setActive(tabs[next].id);
+    select(tabs[next].id);
     listRef.current
       ?.querySelector<HTMLButtonElement>(`#${CSS.escape(tabId(tabs[next].id))}`)
       ?.focus();
@@ -61,7 +87,7 @@ export default function Tabs({ tabs }: { tabs: TabItem[] }) {
               aria-selected={selected}
               aria-controls={panelId(t.id)}
               tabIndex={selected ? 0 : -1}
-              onClick={() => setActive(t.id)}
+              onClick={() => select(t.id)}
               className={`-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
                 selected
                   ? "border-brand-600 text-brand-800"

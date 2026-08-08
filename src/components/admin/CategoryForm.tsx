@@ -72,6 +72,15 @@ export default function CategoryForm({
       p.includes(id) ? p.filter((x) => x !== id) : [...p, id]
     );
 
+  // Villa sayısı büyüdükçe onay kutusu listesi taranamaz hale geliyor.
+  // Liste zaten yüklü olduğu için filtre istemcide: sunucuya gitmeden daralt.
+  const [villaQuery, setVillaQuery] = useState("");
+  const visibleVillas = useMemo(() => {
+    const term = villaQuery.trim().toLocaleLowerCase("tr");
+    if (!term) return villas;
+    return villas.filter((v) => v.name.toLocaleLowerCase("tr").includes(term));
+  }, [villas, villaQuery]);
+
   const submit = () => {
     setErrors({});
     start(async () => {
@@ -188,14 +197,34 @@ export default function CategoryForm({
             atayabilirsiniz.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {villas.map((v) => (
-              <label key={v.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sand-50">
-                <input type="checkbox" checked={villaIds.includes(v.id)} onChange={() => toggleVilla(v.id)} className="h-4 w-4 rounded border-sand-300 text-brand-600" />
-                <span className="text-brand-900">{v.name}</span>
-              </label>
-            ))}
-          </div>
+          <>
+            {villas.length > 8 && (
+              <input
+                type="search"
+                value={villaQuery}
+                onChange={(e) => setVillaQuery(e.target.value)}
+                placeholder={`${villas.length} villa içinde ara`}
+                aria-label="Villa ara"
+                className={`${inputCls} mb-3`}
+              />
+            )}
+
+            {visibleVillas.length === 0 ? (
+              <p className="text-sm text-brand-900/70">
+                &ldquo;{villaQuery}&rdquo; ile eşleşen villa yok. Seçili villalar
+                korunuyor.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {visibleVillas.map((v) => (
+                  <label key={v.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sand-50">
+                    <input type="checkbox" checked={villaIds.includes(v.id)} onChange={() => toggleVilla(v.id)} className="h-4 w-4 rounded border-sand-300 text-brand-600" />
+                    <span className="text-brand-900">{v.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </Section>
 

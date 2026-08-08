@@ -4,6 +4,8 @@ import { ExternalLink } from "lucide-react";
 import { getAdminVilla, getVillaForEdit } from "@/lib/data/admin/villas";
 import { getRegionOptions } from "@/lib/data/admin/regions";
 import { villaStatusMeta } from "@/lib/adminMeta";
+import { villaQuality } from "@/lib/villaQuality";
+import QualityPanel from "@/components/admin/QualityPanel";
 import Tabs from "@/components/admin/Tabs";
 import VillaForm from "@/components/admin/VillaForm";
 import ImageManager from "@/components/admin/ImageManager";
@@ -11,6 +13,8 @@ import SeasonEditor from "@/components/admin/SeasonEditor";
 import BlockEditor from "@/components/admin/BlockEditor";
 import { PageHeader, BackLink } from "@/components/admin/ui/PageHeader";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
+
+import DeleteVillaButton from "@/components/admin/DeleteVillaButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +32,17 @@ export default async function VillaDetayPage({
   if (!full || !detail) notFound();
 
   const s = villaStatusMeta[full.status];
+  const quality = villaQuality({
+    descriptionTr: full.descriptionTr,
+    descriptionEn: full.descriptionEn,
+    imageCount: full.images.length,
+    basePrice: full.basePrice,
+    seasonCount: detail.seasons.length,
+    minNights: full.minNights,
+  });
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <BackLink href="/yonetim/villalar">Villalar</BackLink>
 
       <div className="mt-3">
@@ -48,11 +60,21 @@ export default async function VillaDetayPage({
               </Link>
             </>
           }
+          actions={
+            <DeleteVillaButton villaId={full.id} villaName={full.name} />
+          }
         />
       </div>
 
+      {quality.missing.length > 0 && (
+        <div className="mt-4">
+          <QualityPanel quality={quality} />
+        </div>
+      )}
+
       <div className="mt-5">
         <Tabs
+          paramKey="sekme"
           tabs={[
             {
               id: "info",

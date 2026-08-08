@@ -18,6 +18,7 @@ import { useUnsavedGuard } from "@/components/admin/ui/useUnsavedGuard";
 import { inputCls } from "@/components/admin/ui/styles";
 import type { AdminVillaFull } from "@/lib/data/admin/villas";
 import type { RegionOption } from "@/lib/data/admin/regions";
+import CascadeRegionSelect from "@/components/admin/CascadeRegionSelect";
 
 type FormState = {
   name: string;
@@ -46,11 +47,22 @@ type FormState = {
   basePrice: string;
   cleaningFee: string;
   serviceRate: string;
+  weekendPremiumPercent: string;
+  losWeeklyDiscountPercent: string;
+  losMonthlyDiscountPercent: string;
+  lastMinuteDiscountPercent: string;
+  lastMinuteDays: string;
+  extraGuestFee: string;
+  extraGuestAfter: string;
   descriptionTr: string;
   descriptionEn: string;
   videoUrl: string;
   amenities: string[];
 };
+
+/** Sayısal opsiyonel alanı forma çevirir: null/0 → boş (kural uygulanmaz). */
+const str = (n: number | null | undefined) =>
+  n != null && n !== 0 ? String(n) : "";
 
 function fromVilla(v: AdminVillaFull | null): FormState {
   return {
@@ -81,6 +93,13 @@ function fromVilla(v: AdminVillaFull | null): FormState {
     basePrice: String(v?.basePrice ?? 0),
     cleaningFee: String(v?.cleaningFee ?? 0),
     serviceRate: String(v?.serviceRate ?? 0.05),
+    weekendPremiumPercent: str(v?.weekendPremiumPercent),
+    losWeeklyDiscountPercent: str(v?.losWeeklyDiscountPercent),
+    losMonthlyDiscountPercent: str(v?.losMonthlyDiscountPercent),
+    lastMinuteDiscountPercent: str(v?.lastMinuteDiscountPercent),
+    lastMinuteDays: str(v?.lastMinuteDays),
+    extraGuestFee: str(v?.extraGuestFee),
+    extraGuestAfter: str(v?.extraGuestAfter),
     descriptionTr: v?.descriptionTr ?? "",
     descriptionEn: v?.descriptionEn ?? "",
     videoUrl: v?.videoUrl ?? "",
@@ -110,6 +129,61 @@ export default function VillaForm({
     () => JSON.stringify(f) !== JSON.stringify(saved),
     [f, saved]
   );
+
+  /**
+   * Fiyat kurallarının canlı örnek hesabı (yol haritası 4.3: "her kuralın
+   * yanına canlı örnek koy"). Taban fiyata göre, kural değiştikçe güncellenir —
+   * kullanıcı %15'in ne demek olduğunu rakamla görür, karmaşık hissetmez.
+   */
+  const ruleHint = useMemo(() => {
+    const base = Number(f.basePrice) || 0;
+    const tl = (n: number) =>
+      new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(
+        Math.round(n)
+      ) + "₺";
+    const pctExample = (v: string, up: boolean) => {
+      const p = Number(v) || 0;
+      if (base <= 0 || p <= 0) return "Boş = uygulanmaz";
+      const res = up ? base * (1 + p / 100) : base * (1 - p / 100);
+      return `${tl(base)} → ${tl(res)}`;
+    };
+    return {
+      weekend: pctExample(f.weekendPremiumPercent, true),
+      weekly: pctExample(f.losWeeklyDiscountPercent, false),
+      monthly: pctExample(f.losMonthlyDiscountPercent, false),
+      lastMinute: pctExample(f.lastMinuteDiscountPercent, false),
+      extraGuest:
+        Number(f.extraGuestFee) > 0
+          ? `Kişi başı gece +${tl(Number(f.extraGuestFee))}`
+          : "Boş = uygulanmaz",
+    };
+  }, [
+    f.basePrice,
+    f.weekendPremiumPercent,
+    f.losWeeklyDiscountPercent,
+    f.losMonthlyDiscountPercent,
+    f.lastMinuteDiscountPercent,
+    f.extraGuestFee,
+  ]);
+
+  /**
+   * Sekmeler `hidden` ile ayakta tutulduğu için (Tabs.tsx) bu bileşen hiç
+   * unmount olmuyor: "Görseller" sekmesinde yapılan bir işlem `router.refresh()`
+   * çağırınca sunucudan yeni `villa` gelir ama `useState` başlatıcısı bir daha
+   * çalışmaz — form bayat veri göstermeye devam ederdi.
+   *
+   * Kullanıcı henüz bir alana dokunmadıysa sessizce tazeleriz. Dokunduysa
+   * yazdıklarını silmek doğru olmaz; o durumda kaydetmedeki `updated_at`
+   * kontrolü devreye girip ezmeyi engelliyor.
+   */
+  const [version, setVersion] = useState(villa?.updatedAt ?? null);
+  if (villa && villa.updatedAt !== version && !dirty) {
+    const fresh = fromVilla(villa);
+    setVersion(villa.updatedAt);
+    setSaved(fresh);
+    setF(fresh);
+  }
+
   useUnsavedGuard(dirty);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
@@ -143,14 +217,20 @@ export default function VillaForm({
       const payload = { ...f };
       const res =
         mode === "edit" && villa
-          ? await updateVilla({ id: villa.id, ...payload })
+          ? await updateVilla({
+              id: villa.id,
+              updatedAt: villa.updatedAt,
+              ...payload,
+            })
           : await createVilla(payload);
 
       if (res.ok) {
         if (mode === "create") {
           toast.success("Villa oluşturuldu.");
           setSaved(payload); // çıkış uyarısı tetiklenmesin
-          router.push(`/yonetim/villalar/${res.id}`);
+          // Kayıttan sonra doğrudan Görseller sekmesine: fotoğraf yükleme
+          // villa oluşturmanın devamı gibi hissedilsin, ayrı bir adım gibi değil.
+          router.push(`/yonetim/villalar/${res.id}?sekme=images`);
         } else {
           setSaved(payload);
           toast.success("Kaydedildi.");
@@ -166,7 +246,9 @@ export default function VillaForm({
         toast.error(
           res.error === "auth"
             ? "Oturumunuz sona ermiş. Yeniden giriş yapın."
-            : "Kaydedilemedi."
+            : res.error === "conflict"
+              ? "Bu villa siz düzenlerken başka bir yerden kaydedilmiş. Değişiklikleriniz yazılmadı — sayfayı yenileyip tekrar uygulayın."
+              : "Kaydedilemedi."
         );
       }
     });
@@ -205,18 +287,12 @@ export default function VillaForm({
             />
           </Field>
           <Field label="Bölge" required error={errors.regionId}>
-            <select
-              className={inputCls}
+            <CascadeRegionSelect
+              regions={regions}
               value={f.regionId}
-              onChange={(e) => set("regionId", e.target.value)}
-            >
-              <option value="">Seçin…</option>
-              {regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}, {r.province}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => set("regionId", id)}
+              error={errors.regionId}
+            />
           </Field>
           <Field
             label="Durum"
@@ -334,6 +410,49 @@ export default function VillaForm({
               ))}
             </select>
           </Field>
+        </div>
+      </Section>
+
+      <Section
+        title="Fiyat kuralları"
+        description="Hepsi isteğe bağlı. Boş bırakılan kural uygulanmaz. Taban fiyat üzerinden hesaplanır."
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Hafta sonu farkı (%)"
+              error={errors.weekendPremiumPercent}
+              hint={ruleHint.weekend}
+            >
+              <input type="number" min={0} max={100} className={inputCls} value={f.weekendPremiumPercent} onChange={(e) => set("weekendPremiumPercent", e.target.value)} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Kapasite üstü kişi ücreti (₺/gece)" error={errors.extraGuestFee} hint={ruleHint.extraGuest}>
+                <input type="number" min={0} className={inputCls} value={f.extraGuestFee} onChange={(e) => set("extraGuestFee", e.target.value)} />
+              </Field>
+              <Field label="Şu kişiden sonra" error={errors.extraGuestAfter} hint="Ör. 6">
+                <input type="number" min={1} className={inputCls} value={f.extraGuestAfter} onChange={(e) => set("extraGuestAfter", e.target.value)} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Uzun konaklama: 7+ gece indirimi (%)" error={errors.losWeeklyDiscountPercent} hint={ruleHint.weekly}>
+              <input type="number" min={0} max={90} className={inputCls} value={f.losWeeklyDiscountPercent} onChange={(e) => set("losWeeklyDiscountPercent", e.target.value)} />
+            </Field>
+            <Field label="Uzun konaklama: 28+ gece indirimi (%)" error={errors.losMonthlyDiscountPercent} hint={ruleHint.monthly}>
+              <input type="number" min={0} max={90} className={inputCls} value={f.losMonthlyDiscountPercent} onChange={(e) => set("losMonthlyDiscountPercent", e.target.value)} />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+            <Field label="Son dakika indirimi (%)" error={errors.lastMinuteDiscountPercent} hint={ruleHint.lastMinute}>
+              <input type="number" min={0} max={90} className={inputCls} value={f.lastMinuteDiscountPercent} onChange={(e) => set("lastMinuteDiscountPercent", e.target.value)} />
+            </Field>
+            <Field label="Girişe kaç gün kala" error={errors.lastMinuteDays} hint="Ör. 7">
+              <input type="number" min={1} max={90} className={inputCls} value={f.lastMinuteDays} onChange={(e) => set("lastMinuteDays", e.target.value)} />
+            </Field>
+          </div>
         </div>
       </Section>
 

@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Wallet,
   Inbox,
+  Timer,
   ChevronRight,
 } from "lucide-react";
 import { getDashboardOverview } from "@/lib/data/admin/stats";
@@ -14,7 +15,7 @@ import { PageHeader, EmptyState } from "@/components/admin/ui/PageHeader";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
 import { cardCls, mutedCls } from "@/components/admin/ui/styles";
 import { formatPrice } from "@/lib/format";
-import { waitingBadge } from "@/lib/bookingWaiting";
+import { waitingBadge, formatDuration } from "@/lib/bookingWaiting";
 
 export const dynamic = "force-dynamic";
 
@@ -204,7 +205,7 @@ export default async function DashboardPage() {
       {/* Bu ay */}
       <div className="mt-6">
         <SectionTitle>Bu ay</SectionTitle>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Tile
             icon={TrendingUp}
             label="Talep → onay dönüşümü"
@@ -221,6 +222,17 @@ export default async function DashboardPage() {
             label="Son 7 günde gelen talep"
             value={s.last7DaysRequests}
             href="/yonetim/talepler"
+          />
+          {/* Ölçmek tek başına davranışı değiştirir (yol haritası 2.4). */}
+          <Tile
+            icon={Timer}
+            label="Ortalama ilk yanıt"
+            value={
+              s.avgResponseMinutes != null
+                ? formatDuration(s.avgResponseMinutes)
+                : "—"
+            }
+            sub={s.avgResponseMinutes != null ? "son 30 gün" : "henüz ölçüm yok"}
           />
         </div>
       </div>

@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Star, CalendarCheck, Loader2 } from "lucide-react";
+import { CalendarCheck, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { formatPrice, formatDateShort } from "@/lib/format";
+import { formatPrice, formatDateShort, toISO } from "@/lib/format";
 import { rangeHasConflict } from "@/lib/availability";
 import { calcPrice } from "@/lib/pricing";
 import { createBookingRequest } from "@/lib/actions/booking";
@@ -76,7 +76,12 @@ export default function BookingBox({
   // Buradaki tutar yalnızca gösterim; nihai tutarı sunucu yeniden hesaplar.
   const price =
     checkIn && checkOut && !conflict
-      ? calcPrice(villa, checkIn, checkOut)
+      ? calcPrice(villa, checkIn, checkOut, {
+          guests: guests.adults + guests.children,
+          // Son dakika indirimi için bugün; istemcide hesaplanır (bu bileşen
+          // zaten "use client", SSR uyuşmazlığı yok).
+          asOf: toISO(new Date()),
+        })
       : null;
 
   const nights = price?.nights ?? 0;
@@ -100,6 +105,7 @@ export default function BookingBox({
         phone,
         email,
         note,
+        lang,
       });
       if (res.ok) {
         router.push("/rezervasyon-talebi/tesekkurler");
@@ -117,21 +123,12 @@ export default function BookingBox({
 
   return (
     <div className="rounded-2xl border border-sand-200 bg-white p-5">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <span className="text-2xl font-extrabold text-brand-800">
-            {formatPrice(villa.pricePerNight, lang)}
-          </span>
-          <span className="ml-1 text-sm text-brand-900/60">
-            / {t("card.perNight")}
-          </span>
-        </div>
-        <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-900">
-          <Star className="h-4 w-4 fill-sun-400 text-sun-400" />
-          {villa.rating.toFixed(1)}
-          <span className="font-normal text-brand-900/50">
-            ({villa.reviewCount})
-          </span>
+      <div className="flex items-baseline">
+        <span className="text-2xl font-extrabold text-brand-800">
+          {formatPrice(villa.pricePerNight, lang)}
+        </span>
+        <span className="ml-1 text-sm text-brand-900/60">
+          / {t("card.perNight")}
         </span>
       </div>
 
@@ -172,6 +169,18 @@ export default function BookingBox({
             </span>
             <span>{formatPrice(price.subtotal, lang)}</span>
           </div>
+          {price.discount > 0 && (
+            <div className="flex justify-between font-semibold text-emerald-700">
+              <span>{price.discountLabel}</span>
+              <span>−{formatPrice(price.discount, lang)}</span>
+            </div>
+          )}
+          {price.extraGuestFee > 0 && (
+            <div className="flex justify-between text-brand-900/70">
+              <span>{lang === "tr" ? "Ek kişi ücreti" : "Extra guest fee"}</span>
+              <span>{formatPrice(price.extraGuestFee, lang)}</span>
+            </div>
+          )}
           {price.cleaningFee > 0 && (
             <div className="flex justify-between text-brand-900/70">
               <span>{t("book.cleaning")}</span>

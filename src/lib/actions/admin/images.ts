@@ -5,6 +5,7 @@ import { supabaseSession } from "@/lib/supabase/session";
 import {
   imageAltSchema,
   reorderImageSchema,
+  reorderImagesSchema,
   deleteChildSchema,
 } from "@/lib/schemas/adminVilla";
 import { processImage } from "@/lib/images/process";
@@ -74,6 +75,49 @@ export async function uploadImage(formData: FormData): Promise<ImageResult> {
     // kayıt başarısızsa yüklenen dosyayı geri al
     await supabase.storage.from("villa-images").remove([path]);
     return { ok: false, error: "generic" };
+  }
+
+  await revalidateVilla(supabase, villaId);
+  return { ok: true };
+}
+
+/**
+ * Görsellerin tam sırasını yeniden yazar (sürükle-bırak ve "kapak yap").
+ * İstemciden gelen id listesi, villanın gerçek görselleriyle eşleşmezse
+ * reddedilir — eksik/fazla id ile sıra bozulmasın.
+ */
+export async function reorderImages(input: unknown): Promise<ImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = reorderImagesSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "validation" };
+  const { villaId, orderedIds } = parsed.data;
+
+  const supabase = await supabaseSession();
+  const { data: imgs } = await supabase
+    .from("villa_images")
+    .select("id")
+    .eq("villa_id", villaId);
+  if (!imgs) return { ok: false, error: "generic" };
+
+  // Gelen liste villanın görsellerinin tam kümesi olmalı.
+  const actual = new Set(imgs.map((i) => i.id));
+  if (
+    orderedIds.length !== actual.size ||
+    !orderedIds.every((id) => actual.has(id))
+  ) {
+    return { ok: false, error: "validation" };
+  }
+
+  // sort_order = dizideki konum. Sıra sitedeki galeri sırasını belirler.
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase
+      .from("villa_images")
+      .update({ sort_order: i })
+      .eq("id", orderedIds[i])
+      .eq("villa_id", villaId);
+    if (error) return { ok: false, error: "generic" };
   }
 
   await revalidateVilla(supabase, villaId);

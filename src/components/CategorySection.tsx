@@ -24,6 +24,41 @@ export default function CategorySection({
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
 
+  // Mouse ile tut-sürükle (üst kategori şeridiyle aynı davranış).
+  const isDownRef = useRef(false);
+  const startXRef = useRef(0);
+  const startScrollRef = useRef(0);
+  const draggedRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+
+  const handleDown = (e: React.MouseEvent) => {
+    const el = scroller.current;
+    if (!el) return;
+    isDownRef.current = true;
+    startXRef.current = e.pageX - el.offsetLeft;
+    startScrollRef.current = el.scrollLeft;
+    draggedRef.current = false;
+  };
+
+  const handleMove = (e: React.MouseEvent) => {
+    const el = scroller.current;
+    if (!isDownRef.current || !el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    // 1:1 takip — çarpan büyüdükçe imleçle içerik arasında kayma hissi doğuyor.
+    const walk = x - startXRef.current;
+    if (Math.abs(walk) > 5) {
+      draggedRef.current = true;
+      if (!dragging) setDragging(true);
+    }
+    el.scrollLeft = startScrollRef.current - walk;
+  };
+
+  const handleUp = () => {
+    isDownRef.current = false;
+    setTimeout(() => setDragging(false), 50);
+  };
+
   const bySlug = new Map(allVillas.map((v) => [v.slug, v]));
   const villas = category.villaSlugs
     .map((slug) => bySlug.get(slug))
@@ -66,46 +101,67 @@ export default function CategorySection({
             </div>
           </div>
 
-          <div className="hidden shrink-0 items-center gap-2 sm:flex">
-            <Link
-              href={`/villalar?category=${category.slug}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
-            >
-              {t("home.viewAll")} <ArrowRight className="h-4 w-4" />
-            </Link>
+          <Link
+            href={`/villalar?category=${category.slug}`}
+            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 sm:inline-flex"
+          >
+            {t("home.viewAll")} <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        {/* Yana kaydırmalı villa listesi — oklar şeridin sol/sağ kenarında */}
+        <div className="relative">
+          {/* SOL OK — görsel hizasında, yalnızca kaydırılacak yer varsa */}
+          {canLeft && (
             <button
               onClick={() => scroll(-1)}
-              disabled={!canLeft}
               aria-label="Önceki"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-sand-200 bg-white text-brand-800 transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-30"
+              className="absolute left-1 top-[124px] z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-sand-200 bg-white/95 text-brand-800 shadow-md backdrop-blur-sm transition hover:scale-110 hover:bg-white active:scale-95 sm:flex"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
+          )}
+          {/* SAĞ OK */}
+          {canRight && (
             <button
               onClick={() => scroll(1)}
-              disabled={!canRight}
               aria-label="Sonraki"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-sand-200 bg-white text-brand-800 transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-30"
+              className="absolute right-1 top-[124px] z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-sand-200 bg-white/95 text-brand-800 shadow-md backdrop-blur-sm transition hover:scale-110 hover:bg-white active:scale-95 sm:flex"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
-          </div>
-        </div>
+          )}
 
-        {/* Yana kaydırmalı villa listesi */}
-        <div
-          ref={scroller}
-          onScroll={update}
-          className="no-scrollbar -mx-4 mt-6 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth px-4 pb-2 sm:mx-0 sm:px-0"
-        >
-          {villas.map((v) => (
-            <div
-              key={v.slug}
-              className="w-[280px] shrink-0 snap-start sm:w-[320px]"
-            >
-              <VillaCard villa={v} />
-            </div>
-          ))}
+          <div
+            ref={scroller}
+            onScroll={update}
+            onMouseDown={handleDown}
+            onMouseMove={handleMove}
+            onMouseUp={handleUp}
+            onMouseLeave={handleUp}
+            onDragStart={(e) => e.preventDefault()}
+            onClickCapture={(e) => {
+              // Sürükleme sonrası oluşan tıklamayı yut — karta girmesin.
+              if (draggedRef.current) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+            className={`no-scrollbar -mx-4 mt-6 flex gap-5 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 ${
+              dragging
+                ? "cursor-grabbing snap-none select-none"
+                : "cursor-grab snap-x snap-proximity"
+            }`}
+          >
+            {villas.map((v) => (
+              <div
+                key={v.slug}
+                className="w-[280px] shrink-0 snap-start sm:w-[320px]"
+              >
+                <VillaCard villa={v} />
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Mobil "Tümünü Gör" */}

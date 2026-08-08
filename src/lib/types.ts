@@ -40,6 +40,15 @@ export interface Villa {
   pool: PoolType;
   size: number; // m2
   distanceToSea: number; // meters
+  /**
+   * Panelden girilen mesafeler (km). Doldurulmayan alan mesafe cetvelinde
+   * hiç gösterilmez — tahmini/uydurma değer basmaktansa satırı atlamak doğru.
+   */
+  distanceAirportKm?: number | null;
+  distanceMarketKm?: number | null;
+  distanceRestaurantKm?: number | null;
+  distanceTransitKm?: number | null;
+  distanceCenterKm?: number | null;
   rating: number; // 0-5
   reviewCount: number;
   featured: boolean;
@@ -58,6 +67,14 @@ export interface Villa {
   cleaningFee?: number;
   /** Hizmet bedeli oranı, ör. 0.05 */
   serviceRate?: number;
+  /** Fiyat kuralları (Faz 5.7 / 4.3) — hepsi opsiyonel, calcPrice'ta uygulanır. */
+  weekendPremiumPercent?: number | null;
+  losWeeklyDiscountPercent?: number | null;
+  losMonthlyDiscountPercent?: number | null;
+  lastMinuteDiscountPercent?: number | null;
+  lastMinuteDays?: number | null;
+  extraGuestFee?: number | null;
+  extraGuestAfter?: number | null;
   /** Reserved date ranges (ISO yyyy-mm-dd, inclusive start, exclusive end) */
   bookedRanges: { start: string; end: string }[];
   /** Seasonal pricing rows shown in the price table */
@@ -69,3 +86,37 @@ export interface Villa {
     price: number;
   }[];
 }
+
+export interface CustomPage {
+  id: string;
+  slug: string;
+  titleTr: string;
+  titleEn: string;
+  contentTr: string;
+  contentEn: string;
+  metaTitleTr?: string | null;
+  metaTitleEn?: string | null;
+  metaDescriptionTr?: string | null;
+  metaDescriptionEn?: string | null;
+  status: "draft" | "published";
+  showInFooter: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PageInput {
+  slug: string;
+  titleTr: string;
+  titleEn: string;
+  contentTr: string;
+  contentEn: string;
+  metaTitleTr?: string;
+  metaTitleEn?: string;
+  metaDescriptionTr?: string;
+  metaDescriptionEn?: string;
+  status: "draft" | "published";
+  showInFooter: boolean;
+  sortOrder: number;
+}
+

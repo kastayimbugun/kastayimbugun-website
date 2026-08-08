@@ -1,6 +1,8 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getRegions } from "@/lib/data/villas";
+import { getFooterPages } from "@/lib/data/pages";
+import { getSiteSettings } from "@/lib/data/site";
 
 /**
  * Herkese açık sitenin kabuğu: header + footer + içerik.
@@ -11,13 +13,21 @@ export default async function SiteLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const regions = await getRegions();
+  const [regions, footerPages, site] = await Promise.all([
+    getRegions(),
+    getFooterPages(),
+    getSiteSettings(),
+  ]);
 
   return (
     <>
-      <Header />
+      <Header config={site.headerConfig} />
       <main className="flex-1">{children}</main>
-      <Footer regions={regions} />
+      <Footer
+        regions={regions}
+        footerPages={footerPages}
+        config={site.footerConfig}
+      />
     </>
   );
 }

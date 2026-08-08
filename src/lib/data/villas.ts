@@ -10,8 +10,12 @@ import type { Villa, AmenityKey, PoolType } from "@/lib/types";
 
 const VILLA_FIELDS = `
   slug, name, code, capacity, bedrooms, bathrooms, pool, size_m2, distance_to_sea,
+  distance_airport_km, distance_market_km, distance_restaurant_km,
+  distance_transit_km, distance_center_km,
   rating, review_count, featured, discount_percent, deal_tag,
   check_in, check_out, min_nights, base_price, cleaning_fee, service_rate,
+  weekend_premium_percent, los_weekly_discount_percent, los_monthly_discount_percent,
+  last_minute_discount_percent, last_minute_days, extra_guest_fee, extra_guest_after,
   description_tr, description_en, video_url, amenities,
   regions ( name, province ),
   villa_images ( storage_path, sort_order ),
@@ -29,6 +33,11 @@ interface VillaRow {
   pool: PoolType;
   size_m2: number | null;
   distance_to_sea: number | null;
+  distance_airport_km: number | null;
+  distance_market_km: number | null;
+  distance_restaurant_km: number | null;
+  distance_transit_km: number | null;
+  distance_center_km: number | null;
   rating: number | null;
   review_count: number | null;
   featured: boolean;
@@ -40,6 +49,13 @@ interface VillaRow {
   base_price: number;
   cleaning_fee: number | null;
   service_rate: number | null;
+  weekend_premium_percent: number | null;
+  los_weekly_discount_percent: number | null;
+  los_monthly_discount_percent: number | null;
+  last_minute_discount_percent: number | null;
+  last_minute_days: number | null;
+  extra_guest_fee: number | null;
+  extra_guest_after: number | null;
   description_tr: string | null;
   description_en: string | null;
   video_url: string | null;
@@ -76,6 +92,11 @@ function mapVilla(row: VillaRow): Villa {
     pool: row.pool,
     size: row.size_m2 ?? 0,
     distanceToSea: row.distance_to_sea ?? 0,
+    distanceAirportKm: row.distance_airport_km,
+    distanceMarketKm: row.distance_market_km,
+    distanceRestaurantKm: row.distance_restaurant_km,
+    distanceTransitKm: row.distance_transit_km,
+    distanceCenterKm: row.distance_center_km,
     rating: Number(row.rating ?? 0),
     reviewCount: row.review_count ?? 0,
     featured: row.featured,
@@ -90,6 +111,13 @@ function mapVilla(row: VillaRow): Villa {
     pricePerNight: Number(row.base_price),
     cleaningFee: row.cleaning_fee ?? undefined,
     serviceRate: row.service_rate ?? undefined,
+    weekendPremiumPercent: row.weekend_premium_percent,
+    losWeeklyDiscountPercent: row.los_weekly_discount_percent,
+    losMonthlyDiscountPercent: row.los_monthly_discount_percent,
+    lastMinuteDiscountPercent: row.last_minute_discount_percent,
+    lastMinuteDays: row.last_minute_days,
+    extraGuestFee: row.extra_guest_fee != null ? Number(row.extra_guest_fee) : null,
+    extraGuestAfter: row.extra_guest_after,
     bookedRanges: row.villa_blocks.map((b) => ({
       start: b.starts_on,
       end: b.ends_on,
@@ -146,25 +174,65 @@ export async function getFeatured(): Promise<Villa[]> {
 }
 
 export interface Region {
+  id: string;
   slug: string;
   name: string;
   province: string;
+  parentId: string | null;
+  parentSlug: string | null;
+  parentName: string | null;
+  depth: number;
   /** Bölge kartı görseli. Panelden yüklenmediyse null — kart o zaman bölgedeki
    *  bir villanın fotoğrafına düşer (bkz. HomeClient). */
   heroImage: string | null;
 }
 
 export async function getRegions(): Promise<Region[]> {
-  const { data, error } = await supabaseServer()
+  const supabase = supabaseServer();
+  const { data, error } = await supabase
     .from("regions")
-    .select("slug, name, province, hero_image")
+    .select("id, slug, name, province, parent_id, depth, hero_image")
     .order("sort_order");
 
-  if (error) throw new Error(`Bölgeler okunamadı: ${error.message}`);
-  return data.map((r) => ({
-    slug: r.slug,
-    name: r.name,
-    province: r.province,
-    heroImage: imageUrl(r.hero_image),
-  }));
+  if (error) {
+    // Sütunlar henüz migration uygulanmadığı için yoksa fallback yap
+    if (error.message.includes("parent_id")) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("regions")
+        .select("id, slug, name, province, hero_image")
+        .order("sort_order");
+
+      if (fallbackError) throw new Error(`Bölgeler okunamadı: ${fallbackError.message}`);
+      return (fallbackData ?? []).map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        province: r.province,
+        parentId: null,
+        parentSlug: null,
+        parentName: null,
+        depth: 0,
+        heroImage: imageUrl(r.hero_image),
+      }));
+    }
+    throw new Error(`Bölgeler okunamadı: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const map = new Map(rows.map((r) => [r.id, r]));
+
+  return rows.map((r) => {
+    const parent = r.parent_id ? map.get(r.parent_id) : null;
+    return {
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      province: parent ? parent.name : r.province,
+      parentId: r.parent_id ?? null,
+      parentSlug: parent ? parent.slug : null,
+      parentName: parent ? parent.name : null,
+      depth: r.depth ?? 0,
+      heroImage: imageUrl(r.hero_image),
+    };
+  });
 }

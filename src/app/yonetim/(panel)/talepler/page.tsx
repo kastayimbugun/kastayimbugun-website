@@ -26,6 +26,8 @@ const filters: { key: BookingStatus | "all"; label: string }[] = [
   { key: "all", label: "Tümü" },
   { key: "new", label: bookingStatusLabel.new },
   { key: "contacted", label: bookingStatusLabel.contacted },
+  { key: "quoted", label: bookingStatusLabel.quoted },
+  { key: "lost", label: bookingStatusLabel.lost },
   { key: "cancelled", label: bookingStatusLabel.cancelled },
 ];
 
@@ -59,7 +61,8 @@ export default async function TaleplerPage({
   ]);
 
   // "Tümü" rozeti Onaylandı'yı saymaz — o artık Rezervasyonlar'ın alanı.
-  const total = counts.new + counts.contacted + counts.cancelled;
+  const total =
+    counts.new + counts.contacted + counts.quoted + counts.cancelled + counts.lost;
   const countFor = (k: BookingStatus | "all") =>
     k === "all" ? total : (counts[k] ?? 0);
 

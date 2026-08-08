@@ -13,6 +13,9 @@ import {
   Sunset,
   PawPrint,
   Baby,
+  Star,
+  BadgePercent,
+  Tag,
   Home,
   type LucideIcon,
 } from "lucide-react";
@@ -37,6 +40,9 @@ const icons: Record<string, LucideIcon> = {
   Sunset,
   PawPrint,
   Baby,
+  Star,
+  BadgePercent,
+  Tag,
 };
 
 /** Kategori ikonunu adına göre çizer. Bilinmeyen ad → varsayılan ikon. */

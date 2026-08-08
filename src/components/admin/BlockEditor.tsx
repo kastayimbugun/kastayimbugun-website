@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarX, Loader2, Lock } from "lucide-react";
+import { CalendarX, CalendarCheck, Loader2, Lock } from "lucide-react";
 import { addBlock, removeBlock } from "@/lib/actions/admin/villas";
 import { cancelReservation } from "@/lib/actions/admin/bookings";
 import { formatDateShort } from "@/lib/format";
@@ -12,6 +12,13 @@ import { useToast } from "@/components/admin/ui/Toast";
 import { useConfirm } from "@/components/admin/ui/ConfirmDialog";
 import { labelCls } from "@/components/admin/ui/styles";
 import type { AdminBlock, AdminSeason } from "@/lib/data/admin/villas";
+
+/** yyyy-mm-dd + 1 gün (blok bitişi yarı-açık: son gece + 1). */
+function addDay(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function BlockEditor({
   villaId,
@@ -30,11 +37,15 @@ export default function BlockEditor({
   const [note, setNote] = useState("");
   const [pending, start] = useTransition();
 
-  // Kapalı/dolu tarihler takvimde "Dolu" olarak görünür
-  const bookedRanges = blocks.map((b) => ({
-    start: b.startsOn,
-    end: b.endsOn,
-  }));
+  // Onaylı rezervasyonlar takvimde kilitli "Dolu"; elle kapatmalar ayrı
+  // (mavi, tıkla-aç). İkisi de aynı villa_blocks kaydından geliyor — multi
+  // takvimle senkron, çünkü orası da aynı tabloya yazıyor.
+  const bookedRanges = blocks
+    .filter((b) => b.source === "booking")
+    .map((b) => ({ start: b.startsOn, end: b.endsOn }));
+  const closedRanges = blocks
+    .filter((b) => b.source !== "booking")
+    .map((b) => ({ start: b.startsOn, end: b.endsOn }));
   const seasonRows = seasons.map((s) => ({
     start: s.startsOn,
     end: s.endsOn,
@@ -49,38 +60,61 @@ export default function BlockEditor({
     return b.note ? `Kapalı — ${b.note}` : "Elle kapatıldı";
   };
 
-  // Sitedeki aralık seçim mantığının aynısı
+  /**
+   * Seçim mantığı multi-calendar (Takvim ekranı) ile aynı: ilk tık giriş
+   * gününü koyar, aynı satırda ikinci tık aralığı tamamlar. Elle kapalı günler
+   * de seçilebilir (toplu açmak için); yalnızca onaylı rezervasyonlar bloklar.
+   */
   const onDayClick = (iso: string) => {
-    if (!checkIn || (checkIn && checkOut)) {
+    // Yeni seçim ya da tamamlanmış aralıktan sonra → tek günlük seçim başlat.
+    if (!checkIn || (checkOut && checkOut !== checkIn)) {
       setCheckIn(iso);
-      setCheckOut(null);
+      setCheckOut(iso);
       return;
     }
-    if (iso <= checkIn) {
+    if (iso < checkIn) {
       setCheckIn(iso);
-      setCheckOut(null);
+      setCheckOut(iso);
       return;
     }
-    if (rangeHasConflict(checkIn, iso, bookedRanges)) {
+    // Seçim onaylı bir rezervasyonun üstünden geçemez.
+    if (rangeHasConflict(checkIn, addDay(iso), bookedRanges)) {
       setCheckIn(iso);
-      setCheckOut(null);
+      setCheckOut(iso);
       return;
     }
     setCheckOut(iso);
   };
 
+  // Seçili aralık (checkIn..checkOut, gece olarak dahil) — kapatılabilir mi
+  // (tamamı boş) yoksa açılabilir mi (elle kapalı gün içeriyor)?
+  const endExclusive = checkOut ? addDay(checkOut) : null;
+  const selManualBlocks =
+    checkIn && endExclusive
+      ? blocks.filter(
+          (b) =>
+            b.source !== "booking" &&
+            b.startsOn < endExclusive &&
+            b.endsOn > checkIn
+        )
+      : [];
+  const selMode: "open" | "close" =
+    selManualBlocks.length > 0 ? "open" : "close";
+
   const close = () => {
-    if (!checkIn || !checkOut) return;
+    if (!checkIn || !endExclusive) return;
     start(async () => {
       const res = await addBlock({
         villaId,
         startsOn: checkIn,
-        endsOn: checkOut,
+        endsOn: endExclusive,
         note,
       });
       if (res.ok) {
         toast.success(
-          `${formatDateShort(checkIn)} – ${formatDateShort(checkOut)} kapatıldı.`
+          `${formatDateShort(checkIn)} – ${formatDateShort(
+            checkOut!
+          )} kapatıldı.`
         );
         setCheckIn(null);
         setCheckOut(null);
@@ -97,6 +131,29 @@ export default function BlockEditor({
                 : "Kapatılamadı."
         );
       }
+    });
+  };
+
+  /** Seçili aralığa değen tüm elle blokları tek seferde açar. */
+  const openSelected = () => {
+    if (selManualBlocks.length === 0) return;
+    start(async () => {
+      for (const b of selManualBlocks) {
+        const res = await removeBlock({ id: b.id, villaId });
+        if (!res.ok) {
+          toast.error("Bazı tarihler açılamadı.");
+          router.refresh();
+          return;
+        }
+      }
+      toast.success(
+        selManualBlocks.length > 1
+          ? `${selManualBlocks.length} kapatma açıldı.`
+          : "Tarihler yeniden müsait."
+      );
+      setCheckIn(null);
+      setCheckOut(null);
+      router.refresh();
     });
   };
 
@@ -141,9 +198,11 @@ export default function BlockEditor({
 
   return (
     <div>
-      {/* Görsel takvim — sitedeki ile aynı */}
+      {/* Görsel takvim — sitedeki ile aynı bileşen; panelde elle kapatmalar
+          tıkla-aç, rezervasyonlar kilitli. */}
       <AvailabilityCalendar
         bookedRanges={bookedRanges}
+        closedRanges={closedRanges}
         seasons={seasonRows}
         checkIn={checkIn}
         checkOut={checkOut}
@@ -151,50 +210,66 @@ export default function BlockEditor({
         getBookedNote={noteForDay}
       />
 
-      {/* Seçim + kapat çubuğu */}
+      {/* Seçim + eylem çubuğu — seçim boşsa "Kapat", elle kapalı gün
+          içeriyorsa "Aç" (birden çok kapatma tek seferde açılır). */}
       <div className="mt-4 flex flex-col gap-3 rounded-xl border border-sand-200 bg-sand-50 p-3 sm:flex-row sm:items-end">
         <div className="text-sm sm:pb-2">
           {checkIn && checkOut ? (
             <span className="font-semibold text-brand-950">
               {formatDateShort(checkIn)} – {formatDateShort(checkOut)}
               <span className="ml-1 font-normal text-brand-900/70">
-                kapatılacak
+                {selMode === "open" ? "açılacak" : "kapatılacak"}
               </span>
-            </span>
-          ) : checkIn ? (
-            <span className="text-brand-900/70">
-              Bitiş tarihini seçin ({formatDateShort(checkIn)} →)
             </span>
           ) : (
             <span className="text-brand-900/70">
-              Takvimden kapatılacak aralığı seçin.
+              Takvimden bir aralık seçin: boş günleri kapatın ya da kapalı
+              günleri seçip açın.
             </span>
           )}
         </div>
 
-        <label className="block sm:ml-auto sm:w-56">
-          <span className={labelCls}>Kapatma notu</span>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Ör. X Turizm"
-            className="w-full rounded-lg border border-sand-200 bg-white px-2.5 py-2 text-sm text-brand-950 outline-none transition placeholder:text-brand-900/45 focus:border-brand-500 focus:ring-2 focus:ring-brand-300"
-          />
-        </label>
+        {selMode === "close" && (
+          <label className="block sm:ml-auto sm:w-56">
+            <span className={labelCls}>Kapatma notu</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ör. X Turizm"
+              className="w-full rounded-lg border border-sand-200 bg-white px-2.5 py-2 text-sm text-brand-950 outline-none transition placeholder:text-brand-900/45 focus:border-brand-500 focus:ring-2 focus:ring-brand-300"
+            />
+          </label>
+        )}
 
-        <button
-          type="button"
-          onClick={close}
-          disabled={pending || !checkIn || !checkOut}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-800 focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-sand-200 disabled:text-brand-900/50"
-        >
-          {pending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <CalendarX className="h-4 w-4" />
-          )}
-          Seçili tarihleri kapat
-        </button>
+        {selMode === "open" ? (
+          <button
+            type="button"
+            onClick={openSelected}
+            disabled={pending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto"
+          >
+            {pending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CalendarCheck className="h-4 w-4" />
+            )}
+            Seçili tarihleri aç
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={close}
+            disabled={pending || !checkIn || !checkOut}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-800 focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-sand-200 disabled:text-brand-900/50"
+          >
+            {pending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CalendarX className="h-4 w-4" />
+            )}
+            Seçili tarihleri kapat
+          </button>
+        )}
       </div>
 
       {/* Kapalı tarihler listesi */}

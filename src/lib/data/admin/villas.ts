@@ -1,14 +1,12 @@
 import "server-only";
 import { supabaseSession } from "@/lib/supabase/session";
+import { safeTerm } from "./searchTerm";
+import { villaQuality } from "@/lib/villaQuality";
 import type { AmenityKey, PoolType } from "@/lib/types";
+import { imageUrl } from "@/lib/images/url";
 
 export type VillaStatus = "draft" | "published" | "archived";
 
-/** Storage yolunu tam public URL'ye çevirir (demo veride zaten tam URL gelebilir). */
-export function imageUrl(path: string) {
-  if (path.startsWith("http")) return path;
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/villa-images/${path}`;
-}
 
 export interface VillaOption {
   id: string;
@@ -128,9 +126,13 @@ export interface AdminVillaListItem {
   id: string;
   name: string;
   slug: string;
+  /** Tesis kodu (KBV1234) — listede aramayla eşleşir. */
+  code: string | null;
   status: VillaStatus;
   basePrice: number;
   regionName: string;
+  /** İçerik kalite skoru (0–100) ve eksikler (yol haritası 4.1). */
+  quality: import("@/lib/villaQuality").VillaQuality;
 }
 
 export interface AdminSeason {
@@ -197,11 +199,23 @@ export interface AdminVillaFull {
   basePrice: number;
   cleaningFee: number;
   serviceRate: number;
+  weekendPremiumPercent: number | null;
+  losWeeklyDiscountPercent: number | null;
+  losMonthlyDiscountPercent: number | null;
+  lastMinuteDiscountPercent: number | null;
+  lastMinuteDays: number | null;
+  extraGuestFee: number | null;
+  extraGuestAfter: number | null;
   descriptionTr: string | null;
   descriptionEn: string | null;
   videoUrl: string | null;
   amenities: AmenityKey[];
   images: AdminImage[];
+  /**
+   * Formun okuduğu sürüm damgası. Kaydederken geri gönderilir; satır o sırada
+   * başkası tarafından değiştirilmişse yazma reddedilir (bkz. docs/panel-kurallari.md §3).
+   */
+  updatedAt: string;
 }
 
 export async function getVillaForEdit(
@@ -217,8 +231,12 @@ export async function getVillaForEdit(
        distance_transit_km, distance_center_km,
        rating, review_count, featured,
        discount_percent, deal_tag, check_in, check_out, min_nights,
-       base_price, cleaning_fee, service_rate, description_tr, description_en,
-       video_url, amenities,
+       base_price, cleaning_fee, service_rate,
+       weekend_premium_percent, los_weekly_discount_percent,
+       los_monthly_discount_percent, last_minute_discount_percent,
+       last_minute_days, extra_guest_fee, extra_guest_after,
+       description_tr, description_en,
+       video_url, amenities, updated_at,
        villa_images ( id, storage_path, sort_order, alt_tr )`
     )
     .eq("id", id)
@@ -238,6 +256,7 @@ export async function getVillaForEdit(
 
   return {
     id: r.id as string,
+    updatedAt: r.updated_at as string,
     slug: r.slug as string,
     name: r.name as string,
     code: (r.code as string) ?? null,
@@ -265,6 +284,14 @@ export async function getVillaForEdit(
     basePrice: Number(r.base_price),
     cleaningFee: Number(r.cleaning_fee ?? 0),
     serviceRate: Number(r.service_rate ?? 0.05),
+    weekendPremiumPercent: (r.weekend_premium_percent as number) ?? null,
+    losWeeklyDiscountPercent: (r.los_weekly_discount_percent as number) ?? null,
+    losMonthlyDiscountPercent: (r.los_monthly_discount_percent as number) ?? null,
+    lastMinuteDiscountPercent: (r.last_minute_discount_percent as number) ?? null,
+    lastMinuteDays: (r.last_minute_days as number) ?? null,
+    extraGuestFee:
+      r.extra_guest_fee != null ? Number(r.extra_guest_fee) : null,
+    extraGuestAfter: (r.extra_guest_after as number) ?? null,
     descriptionTr: (r.description_tr as string) ?? null,
     descriptionEn: (r.description_en as string) ?? null,
     videoUrl: (r.video_url as string) ?? null,
@@ -281,30 +308,147 @@ export async function getVillaForEdit(
   };
 }
 
-/** Panelde tüm villalar (taslak dahil; RLS staff'e izin verir). */
-export async function getAdminVillas(): Promise<AdminVillaListItem[]> {
+export const VILLAS_PAGE_SIZE = 25;
+
+export interface AdminVillaFilters {
+  status?: VillaStatus;
+  /** Varsayılan görünümde arşiv gizlenir; durum sekmesiyle geri getirilir. */
+  excludeStatus?: VillaStatus;
+  q?: string;
+  regionId?: string;
+  sort?: "name" | "price" | "new";
+  page?: number;
+}
+
+export interface AdminVillaPage {
+  total: number;
+  page: number;
+  pageCount: number;
+  rows: AdminVillaListItem[];
+}
+
+/**
+ * Durum DIŞINDAKİ filtreleri uygular. Durum ayrı tutulur çünkü rozet sayıları
+ * "aynı filtrede her durumdan kaç tane var" sorusuna cevap verir.
+ */
+function withVillaFilters(
+  supabase: Awaited<ReturnType<typeof supabaseSession>>,
+  f: AdminVillaFilters,
+  select: string,
+  options?: { count: "exact"; head: boolean }
+) {
+  let q = supabase.from("villas").select(select, options);
+
+  if (f.regionId) q = q.eq("region_id", f.regionId);
+
+  const term = f.q ? safeTerm(f.q) : "";
+  if (term) {
+    q = q.or(`name.ilike.%${term}%,slug.ilike.%${term}%,code.ilike.%${term}%`);
+  }
+  return q;
+}
+
+/**
+ * Panel villa listesi: sunucu tarafı arama + filtre + sayfalama
+ * (docs/panel-kurallari.md §5 — liste istemcide değil veritabanında daralır).
+ *
+ * Arşivlenmiş villalar varsayılan görünümde gizlenir: soft-delete'in eksik
+ * kalan kullanıcı tarafı. Silinen kayıt listeyi kirletmemeli ama durum
+ * sekmesinden erişilebilir kalmalı — kayıt gerçekten silinmiyor.
+ */
+export async function getAdminVillas(
+  f: AdminVillaFilters = {}
+): Promise<AdminVillaPage> {
   const supabase = await supabaseSession();
-  const { data, error } = await supabase
-    .from("villas")
-    .select("id, name, slug, status, base_price, regions ( name )")
-    .order("name");
+  const page = Math.max(1, Math.trunc(f.page ?? 1));
+  const offset = (page - 1) * VILLAS_PAGE_SIZE;
+
+  let query = withVillaFilters(
+    supabase,
+    f,
+    `id, name, slug, code, status, base_price, min_nights,
+     description_tr, description_en, regions ( name ),
+     villa_images ( count ), villa_seasons ( count )`,
+    { count: "exact", head: false }
+  );
+
+  if (f.status) query = query.eq("status", f.status);
+  else if (f.excludeStatus) query = query.neq("status", f.excludeStatus);
+
+  query =
+    f.sort === "price"
+      ? query.order("base_price", { ascending: false })
+      : f.sort === "new"
+        ? query.order("created_at", { ascending: false })
+        : query.order("name");
+
+  const { data, error, count } = await query.range(
+    offset,
+    offset + VILLAS_PAGE_SIZE - 1
+  );
   if (error) throw new Error(`Villalar okunamadı: ${error.message}`);
 
-  return (data as unknown as Array<{
-    id: string;
-    name: string;
-    slug: string;
-    status: VillaStatus;
-    base_price: number;
-    regions: { name: string } | null;
-  }>).map((v) => ({
-    id: v.id,
-    name: v.name,
-    slug: v.slug,
-    status: v.status,
-    basePrice: Number(v.base_price),
-    regionName: v.regions?.name ?? "—",
-  }));
+  const total = count ?? 0;
+  return {
+    total,
+    page,
+    pageCount: Math.max(1, Math.ceil(total / VILLAS_PAGE_SIZE)),
+    rows: (data as unknown as Array<{
+      id: string;
+      name: string;
+      slug: string;
+      code: string | null;
+      status: VillaStatus;
+      base_price: number;
+      min_nights: number | null;
+      description_tr: string | null;
+      description_en: string | null;
+      regions: { name: string } | null;
+      villa_images: { count: number }[];
+      villa_seasons: { count: number }[];
+    }>).map((v) => ({
+      id: v.id,
+      name: v.name,
+      slug: v.slug,
+      code: v.code,
+      status: v.status,
+      basePrice: Number(v.base_price),
+      regionName: v.regions?.name ?? "—",
+      quality: villaQuality({
+        descriptionTr: v.description_tr,
+        descriptionEn: v.description_en,
+        imageCount: v.villa_images?.[0]?.count ?? 0,
+        basePrice: Number(v.base_price),
+        seasonCount: v.villa_seasons?.[0]?.count ?? 0,
+        minNights: v.min_nights,
+      }),
+    })),
+  };
+}
+
+/**
+ * Durum başına villa sayısı (filtre sekmelerindeki rozetler).
+ * Durum başına `count:"exact", head:true` — satır gövdesi hiç taşınmaz,
+ * PostgREST'in satır sınırına takılıp sayı sessizce yanlışlanamaz.
+ */
+export async function getVillaCounts(
+  f: AdminVillaFilters = {}
+): Promise<Record<VillaStatus, number>> {
+  const supabase = await supabaseSession();
+  const statuses: VillaStatus[] = ["published", "draft", "archived"];
+
+  const entries = await Promise.all(
+    statuses.map(async (status) => {
+      const { count, error } = await withVillaFilters(supabase, f, "id", {
+        count: "exact",
+        head: true,
+      }).eq("status", status);
+      if (error) throw new Error(`Villa sayıları okunamadı: ${error.message}`);
+      return [status, count ?? 0] as const;
+    })
+  );
+
+  return Object.fromEntries(entries) as Record<VillaStatus, number>;
 }
 
 /** Tek villa: temel bilgi + sezonlar + bloklar. */

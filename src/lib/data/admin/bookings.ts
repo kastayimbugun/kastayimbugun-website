@@ -1,7 +1,8 @@
 import "server-only";
 import { supabaseSession } from "@/lib/supabase/session";
 import { nightsBetween } from "@/lib/format";
-import type { BookingStatus } from "@/lib/schemas/adminBooking";
+import { safeTerm } from "./searchTerm";
+import type { BookingStatus, LostReason } from "@/lib/schemas/adminBooking";
 
 export interface AdminBooking {
   id: string;
@@ -47,6 +48,100 @@ interface Row {
   villas: { name: string; slug: string } | null;
 }
 
+/** Bir talebin altındaki tarihli arama notu. */
+export interface BookingNote {
+  id: string;
+  body: string;
+  createdAt: string;
+  authorName: string | null;
+}
+
+export interface AdminBookingDetail extends AdminBooking {
+  lostReason: LostReason | null;
+  /** Talebin "Yeni"den ilk çıktığı an — yanıt süresi buradan hesaplanır. */
+  firstResponseAt: string | null;
+  nextFollowUpAt: string | null;
+  notes: BookingNote[];
+}
+
+/**
+ * Talep/rezervasyon detayı: kaydın tamamı + arama notu geçmişi.
+ * Notlar ayrı sorguyla çekilir; ilişkiyi tek sorguya gömmek satır sayısını
+ * çarpar ve sıralamayı zorlaştırır.
+ */
+export async function getBookingDetail(
+  id: string
+): Promise<AdminBookingDetail | null> {
+  const supabase = await supabaseSession();
+
+  const [{ data, error }, { data: noteRows }] = await Promise.all([
+    supabase
+      .from("booking_requests")
+      .select(
+        `id, villa_id, check_in, check_out, adults, children, babies,
+         full_name, phone, email, note, price_estimate,
+         paid_amount, damage_deposit, deposit_note, status, created_at,
+         lost_reason, first_response_at, next_follow_up_at,
+         villas ( name, slug )`
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("booking_notes")
+      .select("id, body, created_at, profiles ( full_name )")
+      .eq("booking_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (error) throw new Error(`Talep okunamadı: ${error.message}`);
+  if (!data) return null;
+
+  const r = data as unknown as Row & {
+    lost_reason: LostReason | null;
+    first_response_at: string | null;
+    next_follow_up_at: string | null;
+  };
+
+  const notes = ((noteRows ?? []) as unknown as Array<{
+    id: string;
+    body: string;
+    created_at: string;
+    profiles: { full_name: string | null } | null;
+  }>).map((n) => ({
+    id: n.id,
+    body: n.body,
+    createdAt: n.created_at,
+    authorName: n.profiles?.full_name ?? null,
+  }));
+
+  return {
+    id: r.id,
+    villaId: r.villa_id,
+    villaName: r.villas?.name ?? "—",
+    villaSlug: r.villas?.slug ?? null,
+    checkIn: r.check_in,
+    checkOut: r.check_out,
+    nights: nightsBetween(r.check_in, r.check_out),
+    adults: r.adults,
+    children: r.children,
+    babies: r.babies,
+    fullName: r.full_name,
+    phone: r.phone,
+    email: r.email,
+    note: r.note,
+    priceEstimate: r.price_estimate,
+    paidAmount: r.paid_amount,
+    damageDeposit: r.damage_deposit,
+    depositNote: r.deposit_note,
+    status: r.status,
+    createdAt: r.created_at,
+    lostReason: r.lost_reason,
+    firstResponseAt: r.first_response_at,
+    nextFollowUpAt: r.next_follow_up_at,
+    notes,
+  };
+}
+
 export type BookingSort = "new" | "checkin";
 
 export interface BookingFilters {
@@ -76,14 +171,6 @@ export interface BookingPage {
 }
 
 export const BOOKINGS_PAGE_SIZE = 25;
-
-/**
- * PostgREST `or` filtresi virgül ve parantezle ayrışır; `%` de joker karakter.
- * Kullanıcı girdisi doğrudan gömülmeden bu karakterlerden arındırılır.
- */
-function safeTerm(input: string): string {
-  return input.replace(/[,()%*\\"']/g, " ").trim().slice(0, 60);
-}
 
 /**
  * Durum DIŞINDAKİ filtreleri uygular. Durum ayrı tutulur çünkü rozet sayıları
@@ -192,8 +279,10 @@ export async function getBookingCounts(
   const statuses: BookingStatus[] = [
     "new",
     "contacted",
+    "quoted",
     "confirmed",
     "cancelled",
+    "lost",
   ];
 
   const results = await Promise.all(

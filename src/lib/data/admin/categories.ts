@@ -7,7 +7,11 @@ export interface AdminCategoryListItem {
   nameTr: string;
   color: string | null;
   featuredOnHome: boolean;
+  showInBrowser: boolean;
+  sortOrder: number;
   villaCount: number;
+  /** Dolu ise villalar otomatik bir kurala göre seçilen "akıllı" blok. */
+  autoRule: string | null;
 }
 
 export interface AdminCategoryFull {
@@ -26,26 +30,47 @@ export interface AdminCategoryFull {
 
 export async function getAdminCategories(): Promise<AdminCategoryListItem[]> {
   const supabase = await supabaseSession();
-  const { data, error } = await supabase
+  // `villa_categories(count)`: ilişkili satırların gövdesi taşınmadan sayılır.
+  // Önceki sürüm her kategori için tüm villa_id listesini çekip JS'te
+  // uzunluğuna bakıyordu — ilişki büyüdükçe boşuna veri, üstelik PostgREST'in
+  // satır sınırına dayanınca sayı sessizce yanlış olurdu.
+  let queryResult = await supabase
     .from("categories")
-    .select("id, slug, name_tr, color, featured_on_home, villa_categories(villa_id)")
+    .select("id, slug, name_tr, color, featured_on_home, show_in_browser, sort_order, auto_rule, villa_categories(count)")
     .order("sort_order");
-  if (error) throw new Error(`Kategoriler okunamadı: ${error.message}`);
 
-  return (data as unknown as Array<{
+  if (
+    queryResult.error &&
+    /show_in_browser|auto_rule/.test(queryResult.error.message ?? "")
+  ) {
+    queryResult = (await supabase
+      .from("categories")
+      .select("id, slug, name_tr, color, featured_on_home, sort_order, villa_categories(count)")
+      .order("sort_order")) as typeof queryResult;
+  }
+
+  if (queryResult.error) throw new Error(`Kategoriler okunamadı: ${queryResult.error.message}`);
+
+  return (queryResult.data as unknown as Array<{
     id: string;
     slug: string;
     name_tr: string;
     color: string | null;
     featured_on_home: boolean;
-    villa_categories: { villa_id: string }[];
+    show_in_browser?: boolean;
+    sort_order?: number;
+    auto_rule?: string | null;
+    villa_categories: { count: number }[];
   }>).map((c) => ({
     id: c.id,
     slug: c.slug,
     nameTr: c.name_tr,
     color: c.color,
     featuredOnHome: c.featured_on_home,
-    villaCount: c.villa_categories?.length ?? 0,
+    showInBrowser: c.show_in_browser ?? true,
+    sortOrder: c.sort_order ?? 0,
+    villaCount: c.villa_categories?.[0]?.count ?? 0,
+    autoRule: c.auto_rule ?? null,
   }));
 }
 

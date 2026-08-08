@@ -149,3 +149,48 @@ export async function setCategoryVillas(
   revalidate(categoryId);
   return { ok: true };
 }
+
+export async function saveCategoryHomeSettings(
+  items: Array<{
+    id: string;
+    showInBrowser: boolean;
+    featuredOnHome: boolean;
+    sortOrder: number;
+  }>
+): Promise<CategoryResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const supabase = await supabaseSession();
+
+  for (const item of items) {
+    const base = {
+      featured_on_home: item.featuredOnHome,
+      featured: item.featuredOnHome,
+      sort_order: item.sortOrder,
+    };
+
+    let { error } = await supabase
+      .from("categories")
+      .update({ ...base, show_in_browser: item.showInBrowser })
+      .eq("id", item.id);
+
+    // `show_in_browser` kolonu henüz veritabanına eklenmemişse (0011 migration'ı
+    // uygulanmadan) tek satırda patlamak yerine o alan olmadan tekrar dene —
+    // böylece görünürlük/sıra yine kaydolur ve sessiz "generic" hata olmaz.
+    if (error && error.message?.includes("show_in_browser")) {
+      ({ error } = await supabase
+        .from("categories")
+        .update(base)
+        .eq("id", item.id));
+    }
+
+    if (error) {
+      return { ok: false, error: "generic" };
+    }
+  }
+
+  revalidatePath("/yonetim/ayarlar");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

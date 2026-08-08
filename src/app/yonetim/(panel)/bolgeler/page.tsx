@@ -1,21 +1,45 @@
-import { getAdminRegions } from "@/lib/data/admin/regions";
-import RegionsManager from "@/components/admin/RegionsManager";
-import { PageHeader } from "@/components/admin/ui/PageHeader";
+import Link from "next/link";
+import { Plus, MapPin } from "lucide-react";
+import { getAdminRegionTree } from "@/lib/data/admin/regions";
+import { PageHeader, EmptyState } from "@/components/admin/ui/PageHeader";
+import { btnPrimary } from "@/components/admin/ui/styles";
+import RegionTreeClient from "@/components/admin/RegionTreeClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function BolgelerPage() {
-  const regions = await getAdminRegions();
+  const tree = await getAdminRegionTree();
+  const totalCount = tree.cities.length + tree.orphans.length;
+
+  const newButton = (
+    <Link href="/yonetim/bolgeler/yeni" className={btnPrimary}>
+      <Plus className="h-4 w-4" />
+      Yeni şehir / bölge
+    </Link>
+  );
 
   return (
     <div>
       <PageHeader
-        title="Bölgeler"
-        description="Villaların atandığı bölgeler. Villası olan bölge silinemez."
+        title="Bölgeler ve Şehirler"
+        description="Villaların atandığı şehirler ve alt bölgeler. Tutamak ikonuyla sıralamayı değiştirebilirsiniz."
+        actions={totalCount > 0 ? newButton : undefined}
       />
-      <div className="mt-5">
-        <RegionsManager regions={regions} />
-      </div>
+
+      {totalCount === 0 ? (
+        <div className="mt-4">
+          <EmptyState
+            icon={MapPin}
+            title="Henüz şehir veya bölge yok"
+            description="Villa ekleyebilmek için önce en az bir şehir veya bölge tanımlamalısınız."
+            action={newButton}
+          />
+        </div>
+      ) : (
+        <div className="mt-6">
+          <RegionTreeClient initialTree={tree} />
+        </div>
+      )}
     </div>
   );
 }

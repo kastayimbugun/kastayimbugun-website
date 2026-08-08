@@ -109,6 +109,35 @@ export const villaFormSchema = z.object({
   basePrice: z.coerce.number().min(0, "Fiyat negatif olamaz"),
   cleaningFee: z.coerce.number().min(0),
   serviceRate: z.coerce.number().min(0).max(1),
+  // Fiyat kuralları (4.3) — hepsi opsiyonel; boş/0 uygulanmaz.
+  weekendPremiumPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(100).nullable()
+  ),
+  losWeeklyDiscountPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(90).nullable()
+  ),
+  losMonthlyDiscountPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(90).nullable()
+  ),
+  lastMinuteDiscountPercent: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(90).nullable()
+  ),
+  lastMinuteDays: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(1).max(90).nullable()
+  ),
+  extraGuestFee: z.preprocess(
+    emptyToNull,
+    z.coerce.number().min(0).max(1_000_000).nullable()
+  ),
+  extraGuestAfter: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(1).max(100).nullable()
+  ),
   descriptionTr: z.preprocess(emptyToNull, z.string().max(4000).nullable()),
   descriptionEn: z.preprocess(emptyToNull, z.string().max(4000).nullable()),
   videoUrl: z.preprocess(
@@ -121,7 +150,29 @@ export const villaFormSchema = z.object({
 export type VillaFormInput = z.infer<typeof villaFormSchema>;
 
 /** Düzenleme: forma id eklenir. */
-export const updateVillaSchema = villaFormSchema.extend({ id: z.uuid() });
+export const updateVillaSchema = villaFormSchema.extend({
+  id: z.uuid(),
+  /**
+   * Formun açıldığı andaki `updated_at`. Sunucu bunu WHERE'e koyar: satır o
+   * sırada başkası tarafından değiştirilmişse güncelleme eşleşmez ve reddedilir.
+   * Opsiyonel — göndermeyen eski istemciyi kırmamak için (kontrol atlanır).
+   */
+  updatedAt: z.string().optional(),
+});
+
+/**
+ * Villa listesi URL parametreleri. Bozuk değer sorguyu patlatmasın diye her
+ * alan `.catch(undefined)` ile yutulur (talepler listesiyle aynı desen).
+ */
+export const villaQuerySchema = z.object({
+  durum: z.enum(["draft", "published", "archived"]).optional().catch(undefined),
+  q: z.string().trim().max(60).optional().catch(undefined),
+  bolge: z.uuid().optional().catch(undefined),
+  sirala: z.enum(["ad", "fiyat", "yeni"]).optional().catch(undefined),
+  sayfa: z.coerce.number().int().min(1).max(9999).optional().catch(undefined),
+});
+
+export type VillaQuery = z.infer<typeof villaQuerySchema>;
 
 /** Görsel alt metni güncelleme. */
 export const imageAltSchema = z.object({
@@ -135,6 +186,16 @@ export const reorderImageSchema = z.object({
   id: z.uuid(),
   villaId: z.uuid(),
   direction: z.enum(["up", "down"]),
+});
+
+/**
+ * Tüm görsel sırasını tek seferde yaz (sürükle-bırak ve "kapak yap").
+ * orderedIds[0] kapak olur. Tek tek takas yerine tam sıra: 12. fotoğrafı
+ * kapak yapmak 11 gidiş-dönüş yerine tek yazma (yol haritası 4.2).
+ */
+export const reorderImagesSchema = z.object({
+  villaId: z.uuid(),
+  orderedIds: z.array(z.uuid()).min(1).max(60),
 });
 
 /** Bir tarih aralığındaki onaylı rezervasyonu iptal edip tarihleri açma. */

@@ -10,6 +10,8 @@ import {
   BedDouble,
   Bath,
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Zap,
 } from "lucide-react";
 import type { Villa } from "@/lib/types";
@@ -17,9 +19,23 @@ import { useI18n } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
 import { villaCode, priceRange } from "@/lib/villaUtils";
 
+/** Kartta gösterilecek görsel sayısı — vitrin için ilk birkaçı yeter. */
+const CARD_IMAGES = 5;
+
 export default function VillaCard({ villa }: { villa: Villa }) {
   const { t, lang } = useI18n();
   const [fav, setFav] = useState(false);
+
+  // Kart görseli artık mini galeri: ok + noktalarla ilk birkaç fotoğraf
+  // gezilebilir. Villa detayına gitmeden (kart bir Link) çalışması için
+  // ok/nokta tıklamaları preventDefault + stopPropagation yapar.
+  const gallery = villa.images.slice(0, CARD_IMAGES);
+  const [idx, setIdx] = useState(0);
+  const go = (e: React.MouseEvent, dir: 1 | -1) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIdx((i) => (i + dir + gallery.length) % gallery.length);
+  };
 
   const code = villa.code ?? villaCode(villa.slug);
   const { min, max } = priceRange(villa);
@@ -39,15 +55,62 @@ export default function VillaCard({ villa }: { villa: Villa }) {
           : "border-sand-200 hover:border-brand-300"
       }`}
     >
-      {/* Görsel */}
+      {/* Görsel — mini galeri */}
       <div className="relative aspect-[16/10] overflow-hidden">
-        <Image
-          src={villa.images[0]}
-          alt={villa.name}
-          fill
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          className="object-cover transition duration-500 group-hover:scale-110"
-        />
+        {gallery.map((src, i) => (
+          <Image
+            key={src}
+            src={src}
+            alt={`${villa.name} — ${i + 1}`}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={i === 0}
+            className={`object-cover transition-opacity duration-300 ${
+              i === idx ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        ))}
+
+        {gallery.length > 1 && (
+          <>
+            {/* Ok'lar — yalnızca hover'da belirir, karta tıklamayı tetiklemez */}
+            <button
+              type="button"
+              onClick={(e) => go(e, -1)}
+              aria-label="Önceki fotoğraf"
+              className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/70 p-1.5 text-brand-900 opacity-0 shadow backdrop-blur transition group-hover:opacity-100 hover:bg-white focus-visible:opacity-100"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => go(e, 1)}
+              aria-label="Sonraki fotoğraf"
+              className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/70 p-1.5 text-brand-900 opacity-0 shadow backdrop-blur transition group-hover:opacity-100 hover:bg-white focus-visible:opacity-100"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+
+            {/* Nokta göstergeleri */}
+            <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+              {gallery.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIdx(i);
+                  }}
+                  aria-label={`${i + 1}. fotoğraf`}
+                  className={`h-1.5 rounded-full transition-all ${
+                    i === idx ? "w-4 bg-white" : "w-1.5 bg-white/60"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Flaş indirim etiketi */}
         {hasDiscount && (

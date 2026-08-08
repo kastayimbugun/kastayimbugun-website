@@ -196,10 +196,15 @@ bulguyu kapatıyor**, çünkü hepsi aynı kök nedenden geliyor.
 | 1.9 | **`<form>` semantiği.** `VillaForm`/`CategoryForm` `<form>` kullanmıyor, kaydet düz `<button onClick>`. Metin alanındayken **Enter çalışmıyor**. `giris/page.tsx:22` doğru yapıyor | `VillaForm.tsx:341` |
 | 1.10 | **Kontrast düzeltmesi.** `text-brand-900/55` ≈ 3.1:1, `/45` ≈ 2.5:1, `/40` ≈ 2.2:1 — hepsi WCAG AA (4.5:1) altında. En kötüsü talepler sütun başlıkları: 11px + 2.2:1. Odak halkası `brand-100` (#fdecce) beyazda görünmez. PLAN.md:412 hedefi "Erişilebilirlik ≥ 90" bu skalayla geçilemez | `globals.css:8,12` |
 
-### Dalga 2 — Günlük operasyon (~2 gün)
+### Dalga 2 — Günlük operasyon (~2 gün) ✅ TAMAM (06.08.2026)
 
 Panelin "veri giriş aracı"ndan "operasyon aracı"na dönüştüğü yer. Sektör araştırmasının
 en yüksek getirili üç maddesi burada.
+
+> 2.1 Bugün ekranı · 2.2 talep notları + takip tarihi (talep detay sayfası) ·
+> 2.3 satış hattı (`quoted`/`lost` + zorunlu kayıp sebebi) · 2.4 yanıt süresi
+> (ilk yanıt damgası + dashboard ortalaması) · 2.5 mobil talep akışı
+> (Ara/WhatsApp 3.1'de, e-posta bildirimi Faz 4 Resend ile).
 
 **2.1 — Dashboard'ı "Bugün" ekranına çevir ✅ TAMAM (04.08.2026)**
 *Esin: Airbnb "Today" sekmesinin 4 bloklu yapısı, Beds24 Arrivals/Departures/Current Guests*
@@ -260,7 +265,12 @@ Talep kartında `tel:` "Ara" ve `wa.me` "WhatsApp" butonları, tek dokunuşla du
 yeni talepte e-posta/tarayıcı bildirimi. Talep gece ve hafta sonu geliyor, acente sahibi masada
 değil — **yanıt süresini saatlerden dakikalara indiren tek müdahale bu.**
 
-### Dalga 3 — Ölçek (~2,5 gün)
+### Dalga 3 — Ölçek (~2,5 gün) ✅ TAMAM (06.08.2026)
+
+> 3.1 villalar listesi (arama/filtre/sayfalama + arşiv ayrımı) ve verimsiz
+> sayımlar · 3.2 multi-calendar (`/yonetim/takvim`, gap night vurgusu +
+> rezervasyon önizleme) · 3.3 toplu güncelleme (`/yonetim/takvim/toplu`) ·
+> 3.4 bayat veri hatası + `updated_at` eşzamanlı düzenleme kontrolü.
 
 **3.1 — Listelerde sunucu tarafı arama + filtre + sayfalama**
 
@@ -310,7 +320,15 @@ yükle → `router.refresh()`. Sekme `hidden` ile saklandığından form state'i
 `useState` başlatıcısı yeniden çalışmaz → form **bayat veri** gösterir, kaydedilirse başkasının
 değişikliğini ezer (`VillaForm.tsx:121`, `Tabs.tsx:32`).
 
-### Dalga 4 — Kalite ve büyüme (~2 gün)
+### Dalga 4 — Kalite ve büyüme (~2 gün) ✅ TAMAM (06.08.2026)
+
+> Dalga 2, 3 ve 4'ün tamamı Faz 5.7'de kapatıldı (bkz. PLAN.md "FAZ 5.7").
+> 4.1 kalite skoru · 4.2 kapak yap + sürükle-bırak (sıralama ve yükleme) ·
+> 4.3 dört fiyat kuralı (canlı örnek hesapla) · 4.4 giriş koruması + sekme URL'de
+> + yıllı tarih aralığı. 3.2 multi-calendar ve 3.3 toplu güncelleme de tamam.
+> Yapılmadı (bilinçli): 4.2'deki oda etiketi (opsiyonel), 4.4'teki VillaForm
+> bölüm gezinmesi ve genişlik tutarlılığı — kozmetik, villa girişi sırasında
+> gerçek ihtiyaç görülürse ele alınır.
 
 **4.1 — Villa içerik kalite skoru**
 *Esin: Booking.com Property Page Score (%100 skor → %18'e kadar daha fazla rezervasyon)*

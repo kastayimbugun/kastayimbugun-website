@@ -54,6 +54,13 @@ function toVillaRow(d: VillaFormInput) {
     base_price: d.basePrice,
     cleaning_fee: d.cleaningFee,
     service_rate: d.serviceRate,
+    weekend_premium_percent: d.weekendPremiumPercent,
+    los_weekly_discount_percent: d.losWeeklyDiscountPercent,
+    los_monthly_discount_percent: d.losMonthlyDiscountPercent,
+    last_minute_discount_percent: d.lastMinuteDiscountPercent,
+    last_minute_days: d.lastMinuteDays,
+    extra_guest_fee: d.extraGuestFee,
+    extra_guest_after: d.extraGuestAfter,
     description_tr: d.descriptionTr,
     description_en: d.descriptionEn,
     video_url: d.videoUrl,
@@ -65,7 +72,7 @@ export type VillaSaveResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      error: "auth" | "validation" | "slug" | "generic";
+      error: "auth" | "validation" | "slug" | "generic" | "conflict";
       /** Alan adı → Türkçe hata mesajı; form bunları alan altında gösterir. */
       fields?: Record<string, string>;
     };
@@ -82,13 +89,16 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
       fields: toFieldErrors(parsed.error),
     };
   }
-  const { id, ...fields } = parsed.data;
+  const { id, updatedAt, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
-  const { error } = await supabase
-    .from("villas")
-    .update(toVillaRow(fields))
-    .eq("id", id);
+
+  // Eşzamanlı düzenleme koruması (docs/panel-kurallari.md §3): form açıldıktan
+  // sonra satır değiştiyse WHERE eşleşmez, kimse kimsenin işini sessizce ezmez.
+  let query = supabase.from("villas").update(toVillaRow(fields)).eq("id", id);
+  if (updatedAt) query = query.eq("updated_at", updatedAt);
+
+  const { data: saved, error } = await query.select("id").maybeSingle();
 
   if (error) {
     if (error.code === "23505") {
@@ -100,6 +110,10 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
     }
     return { ok: false, error: "generic" };
   }
+
+  // Hata yok ama satır dönmediyse: kayıt ya silinmiş ya da araya başka bir
+  // kaydetme girmiş. İkisinde de kullanıcıya söylemek gerekir.
+  if (!saved) return { ok: false, error: "conflict" };
 
   await revalidateVilla(supabase, id);
   return { ok: true, id };
@@ -278,3 +292,159 @@ export async function removeBlock(input: unknown): Promise<VillaChildResult> {
   await revalidateVilla(supabase, parsed.data.villaId);
   return { ok: true };
 }
+
+// ---- Villa Silme (3 Aşamalı Kontrol & Temizlik) ----
+
+export type VillaDeleteStatus = {
+  ok: boolean;
+  name?: string;
+  imageCount?: number;
+  activeBookingsCount?: number;
+  cancelledBookingsCount?: number;
+  error?: string;
+};
+
+export async function getVillaDeleteStatus(villaId: string): Promise<VillaDeleteStatus> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const supabase = await supabaseSession();
+
+  // Villa adı
+  const { data: villa } = await supabase
+    .from("villas")
+    .select("name")
+    .eq("id", villaId)
+    .maybeSingle();
+
+  if (!villa) return { ok: false, error: "not_found" };
+
+  // Görsel sayısı
+  const { count: imageCount } = await supabase
+    .from("villa_images")
+    .select("*", { count: "exact", head: true })
+    .eq("villa_id", villaId);
+
+  // Rezervasyon durumları
+  const { data: bookings } = await supabase
+    .from("booking_requests")
+    .select("id, status")
+    .eq("villa_id", villaId);
+
+  const activeBookingsCount = (bookings || []).filter(
+    (b) => b.status !== "cancelled"
+  ).length;
+  const cancelledBookingsCount = (bookings || []).filter(
+    (b) => b.status === "cancelled"
+  ).length;
+
+  return {
+    ok: true,
+    name: villa.name,
+    imageCount: imageCount ?? 0,
+    activeBookingsCount,
+    cancelledBookingsCount,
+  };
+}
+
+export type DeleteVillaResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: "auth" | "not_found" | "has_active_bookings" | "generic";
+      activeCount?: number;
+    };
+
+export async function deleteVillaCascade(
+  villaId: string,
+  options?: { cancelActiveBookings?: boolean }
+): Promise<DeleteVillaResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const supabase = await supabaseSession();
+
+  // 1. Villa var mı?
+  const { data: villa } = await supabase
+    .from("villas")
+    .select("id, name")
+    .eq("id", villaId)
+    .maybeSingle();
+
+  if (!villa) return { ok: false, error: "not_found" };
+
+  // 2. Aktif rezervasyon kontrolü
+  const { data: activeBookings } = await supabase
+    .from("booking_requests")
+    .select("id")
+    .eq("villa_id", villaId)
+    .neq("status", "cancelled");
+
+  if (activeBookings && activeBookings.length > 0) {
+    if (!options?.cancelActiveBookings) {
+      return {
+        ok: false,
+        error: "has_active_bookings",
+        activeCount: activeBookings.length,
+      };
+    }
+
+    // Kullanıcı onay verdi: Aktif rezervasyonları iptal edildi olarak güncelle
+    await supabase
+      .from("booking_requests")
+      .update({
+        status: "cancelled",
+      })
+      .eq("villa_id", villaId)
+      .neq("status", "cancelled");
+  }
+
+  // 3. Rezervasyonların silinmeyip "İptal Edilenler" listesinde kalabilmesi için villa_id bağını null veya korumalı yap
+  await supabase
+    .from("booking_requests")
+    .update({ villa_id: null })
+    .eq("villa_id", villaId);
+
+  // 4. Görselleri Storage ve DB'den temizle
+  const { data: images } = await supabase
+    .from("villa_images")
+    .select("url")
+    .eq("villa_id", villaId);
+
+  if (images && images.length > 0) {
+    // URL'den storage path'ini ayıkla (e.g. villalar/slug/filename.webp)
+    const storagePaths: string[] = [];
+    images.forEach((img) => {
+      if (img.url) {
+        const parts = img.url.split("/villa-images/");
+        if (parts[1]) storagePaths.push(parts[1]);
+      }
+    });
+
+    if (storagePaths.length > 0) {
+      await supabase.storage.from("villa-images").remove(storagePaths);
+    }
+
+    await supabase.from("villa_images").delete().eq("villa_id", villaId);
+  }
+
+  // 5. Sezon ve Blok kayıtlarını temizle
+  await supabase.from("villa_seasons").delete().eq("villa_id", villaId);
+  await supabase.from("villa_blocks").delete().eq("villa_id", villaId);
+
+  // 6. Villayı sil
+  const { error: delErr } = await supabase
+    .from("villas")
+    .delete()
+    .eq("id", villaId);
+
+  if (delErr) {
+    return { ok: false, error: "generic" };
+  }
+
+  revalidatePath("/yonetim/villalar");
+  revalidatePath("/", "layout");
+
+  return { ok: true };
+}
+

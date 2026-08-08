@@ -8,7 +8,7 @@ export default async function YeniKategoriPage() {
   const villas = await getVillaOptions();
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <BackLink href="/yonetim/kategoriler">Kategoriler</BackLink>
 
       <div className="mt-3">

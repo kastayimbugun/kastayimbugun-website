@@ -57,6 +57,11 @@ export const bookingRequestSchema = z
       .optional(),
 
     note: z.string().max(1000, "Not çok uzun").optional(),
+
+    // Misafirin sitede kullandığı dil. Yalnızca ona giden onay e-postasının
+    // dilini belirler; güvenlik kararlarına girmez. Eski istemciler
+    // göndermeyebilir, bu yüzden opsiyonel (varsayılan "tr").
+    lang: z.enum(["tr", "en"]).optional(),
   })
   // Çıkış tarihi girişten kesinlikle sonra olmalı.
   // ISO yyyy-mm-dd biçimi sözlüksel olarak kronolojik sıralanır, string karşılaştırması yeterli.
