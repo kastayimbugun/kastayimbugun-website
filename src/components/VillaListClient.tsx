@@ -213,29 +213,22 @@ export default function VillaListClient({
               return (
                 <optgroup key={city.slug} label={city.name}>
                   <option value={city.slug}>{city.name} (Tüm Bölgeler)</option>
-                  {districts.map((district) => {
+                  {districts.flatMap((district) => {
                     const neighborhoods = childMap.get(district.id) ?? [];
 
-                    if (neighborhoods.length === 0) {
-                      return (
-                        <option key={district.slug} value={district.slug}>
-                          &nbsp;&nbsp;↳ {district.name}
-                        </option>
-                      );
-                    }
-
-                    return (
-                      <optgroup key={district.slug} label={`── ${district.name}`}>
-                        <option value={district.slug}>
-                          {district.name} (Tüm İlçe)
-                        </option>
-                        {neighborhoods.map((n) => (
-                          <option key={n.slug} value={n.slug}>
-                            &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
-                          </option>
-                        ))}
-                      </optgroup>
+                    const districtOption = (
+                      <option key={district.slug} value={district.slug}>
+                        &nbsp;&nbsp;↳ {district.name} {neighborhoods.length > 0 ? "(Tüm İlçe)" : ""}
+                      </option>
                     );
+
+                    const neighborhoodOptions = neighborhoods.map((n) => (
+                      <option key={n.slug} value={n.slug}>
+                        &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
+                      </option>
+                    ));
+
+                    return [districtOption, ...neighborhoodOptions];
                   })}
                 </optgroup>
               );

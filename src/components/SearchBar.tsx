@@ -258,33 +258,26 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
                       return (
                         <optgroup key={city.slug} label={city.name}>
                           <option value={city.slug}>{city.name} (Tüm Bölgeler)</option>
-                          {districts.map((district) => {
+                          {districts.flatMap((district) => {
                             const neighborhoods = childMap.get(district.id) ?? [];
                             const districtPath = `${city.slug}/${district.slug}`;
 
-                            if (neighborhoods.length === 0) {
-                              return (
-                                <option key={district.slug} value={districtPath}>
-                                  &nbsp;&nbsp;↳ {district.name}
-                                </option>
-                              );
-                            }
-
-                            return (
-                              <optgroup key={district.slug} label={`── ${district.name}`}>
-                                <option value={districtPath}>
-                                  {district.name} (Tüm İlçe)
-                                </option>
-                                {neighborhoods.map((n) => (
-                                  <option
-                                    key={n.slug}
-                                    value={`${districtPath}/${n.slug}`}
-                                  >
-                                    &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
-                                  </option>
-                                ))}
-                              </optgroup>
+                            const districtOption = (
+                              <option key={district.slug} value={districtPath}>
+                                &nbsp;&nbsp;↳ {district.name} {neighborhoods.length > 0 ? "(Tüm İlçe)" : ""}
+                              </option>
                             );
+
+                            const neighborhoodOptions = neighborhoods.map((n) => (
+                              <option
+                                key={n.slug}
+                                value={`${districtPath}/${n.slug}`}
+                              >
+                                &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
+                              </option>
+                            ));
+
+                            return [districtOption, ...neighborhoodOptions];
                           })}
                         </optgroup>
                       );
