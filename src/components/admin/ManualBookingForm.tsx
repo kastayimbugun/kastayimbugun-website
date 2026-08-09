@@ -145,6 +145,15 @@ export default function ManualBookingForm({
         e.preventDefault();
         submit();
       }}
+      onKeyDown={(e) => {
+        // Bir metin/sayı alanında Enter'a basınca form kendiliğinden
+        // gönderilmesin — kayıt yalnızca "Rezervasyon Oluştur" butonuyla oluşsun.
+        // Textarea (not alanı) hariç: orada Enter satır atlamaya devam eder.
+        const el = e.target as HTMLElement;
+        if (e.key === "Enter" && el.tagName !== "TEXTAREA") {
+          e.preventDefault();
+        }
+      }}
       className="space-y-5"
     >
       <Section title="Villa">
