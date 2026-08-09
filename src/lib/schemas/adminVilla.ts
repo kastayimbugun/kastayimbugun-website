@@ -145,6 +145,8 @@ export const villaFormSchema = z.object({
     z.url("Geçerli bir bağlantı girin").nullable()
   ),
   amenities: z.array(z.string().max(40)).max(60),
+  /** Villanın atandığı kategoriler (villa_categories). */
+  categoryIds: z.array(z.uuid()).max(50).default([]),
 });
 
 export type VillaFormInput = z.infer<typeof villaFormSchema>;

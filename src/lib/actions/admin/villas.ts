@@ -25,8 +25,8 @@ export type VillaChildResult =
 
 // ---- Villa temel alanları ----
 
-/** Form alanlarını DB sütunlarına çevirir. */
-function toVillaRow(d: VillaFormInput) {
+/** Form alanlarını DB sütunlarına çevirir. `categoryIds` ayrı tabloya gider. */
+function toVillaRow(d: Omit<VillaFormInput, "categoryIds">) {
   return {
     name: d.name,
     slug: d.slug,
@@ -77,6 +77,37 @@ export type VillaSaveResult =
       fields?: Record<string, string>;
     };
 
+/**
+ * Villanın kategori bağlarını (villa_categories) formdan gelen listeye eşitler.
+ * Villanın eski bağları silinir; seçilen her kategoriye villa, o kategorinin
+ * sonuna eklenir (kategori içi sıra bozulmaz).
+ */
+async function syncVillaCategories(
+  supabase: Awaited<ReturnType<typeof supabaseSession>>,
+  villaId: string,
+  categoryIds: string[]
+) {
+  await supabase.from("villa_categories").delete().eq("villa_id", villaId);
+  if (categoryIds.length === 0) return;
+
+  const rows: { villa_id: string; category_id: string; sort_order: number }[] = [];
+  for (const cid of categoryIds) {
+    const { data: last } = await supabase
+      .from("villa_categories")
+      .select("sort_order")
+      .eq("category_id", cid)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    rows.push({
+      villa_id: villaId,
+      category_id: cid,
+      sort_order: (last?.[0]?.sort_order ?? -1) + 1,
+    });
+  }
+  await supabase.from("villa_categories").insert(rows);
+  revalidatePath("/yonetim/kategoriler");
+}
+
 export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "auth" };
@@ -89,7 +120,7 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
       fields: toFieldErrors(parsed.error),
     };
   }
-  const { id, updatedAt, ...fields } = parsed.data;
+  const { id, updatedAt, categoryIds, ...fields } = parsed.data;
 
   const supabase = await supabaseSession();
 
@@ -115,6 +146,7 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
   // kaydetme girmiş. İkisinde de kullanıcıya söylemek gerekir.
   if (!saved) return { ok: false, error: "conflict" };
 
+  await syncVillaCategories(supabase, id, categoryIds);
   await revalidateVilla(supabase, id);
   return { ok: true, id };
 }
@@ -150,6 +182,7 @@ export async function createVilla(input: unknown): Promise<VillaSaveResult> {
     return { ok: false, error: "generic" };
   }
 
+  await syncVillaCategories(supabase, data.id, parsed.data.categoryIds);
   revalidatePath("/yonetim/villalar");
   revalidatePath("/", "layout");
   return { ok: true, id: data.id };

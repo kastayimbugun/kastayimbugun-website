@@ -1,5 +1,6 @@
 import { Images, CalendarDays, Tags } from "lucide-react";
 import { getRegionOptions } from "@/lib/data/admin/regions";
+import { getCategoryOptions } from "@/lib/data/admin/categories";
 import VillaForm from "@/components/admin/VillaForm";
 import Tabs from "@/components/admin/Tabs";
 import { PageHeader, BackLink } from "@/components/admin/ui/PageHeader";
@@ -40,7 +41,10 @@ function Locked({
 }
 
 export default async function YeniVillaPage() {
-  const regions = await getRegionOptions();
+  const [regions, categoryOptions] = await Promise.all([
+    getRegionOptions(),
+    getCategoryOptions(),
+  ]);
 
   return (
     <div>
@@ -61,7 +65,12 @@ export default async function YeniVillaPage() {
               id: "info",
               label: "Bilgiler",
               content: (
-                <VillaForm villa={null} regions={regions} mode="create" />
+                <VillaForm
+                  villa={null}
+                  regions={regions}
+                  categoryOptions={categoryOptions}
+                  mode="create"
+                />
               ),
             },
             {

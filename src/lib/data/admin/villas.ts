@@ -210,6 +210,7 @@ export interface AdminVillaFull {
   descriptionEn: string | null;
   videoUrl: string | null;
   amenities: AmenityKey[];
+  categoryIds: string[];
   images: AdminImage[];
   /**
    * Formun okuduğu sürüm damgası. Kaydederken geri gönderilir; satır o sırada
@@ -237,7 +238,8 @@ export async function getVillaForEdit(
        last_minute_days, extra_guest_fee, extra_guest_after,
        description_tr, description_en,
        video_url, amenities, updated_at,
-       villa_images ( id, storage_path, sort_order, alt_tr )`
+       villa_images ( id, storage_path, sort_order, alt_tr ),
+       villa_categories ( category_id )`
     )
     .eq("id", id)
     .maybeSingle();
@@ -296,6 +298,9 @@ export async function getVillaForEdit(
     descriptionEn: (r.description_en as string) ?? null,
     videoUrl: (r.video_url as string) ?? null,
     amenities: (r.amenities as AmenityKey[]) ?? [],
+    categoryIds: ((r.villa_categories as { category_id: string }[]) ?? []).map(
+      (c) => c.category_id
+    ),
     images: imgs
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((i) => ({

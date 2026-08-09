@@ -28,6 +28,37 @@ export interface AdminCategoryFull {
   villaIds: string[];
 }
 
+export interface CategoryOption {
+  id: string;
+  nameTr: string;
+}
+
+/**
+ * Villa formunda "Kategoriler" seçimi için sade liste. Otomatik/akıllı bloklar
+ * (Popüler, Son Dakika vb. — auto_rule dolu) elle atanmaz, dışarıda bırakılır.
+ */
+export async function getCategoryOptions(): Promise<CategoryOption[]> {
+  const supabase = await supabaseSession();
+  let q = await supabase
+    .from("categories")
+    .select("id, name_tr, auto_rule")
+    .order("sort_order");
+  if (q.error && q.error.message?.includes("auto_rule")) {
+    q = (await supabase
+      .from("categories")
+      .select("id, name_tr")
+      .order("sort_order")) as typeof q;
+  }
+  if (q.error)
+    throw new Error(`Kategori seçenekleri okunamadı: ${q.error.message}`);
+
+  return (
+    q.data as Array<{ id: string; name_tr: string; auto_rule?: string | null }>
+  )
+    .filter((c) => !c.auto_rule)
+    .map((c) => ({ id: c.id, nameTr: c.name_tr }));
+}
+
 export async function getAdminCategories(): Promise<AdminCategoryListItem[]> {
   const supabase = await supabaseSession();
   // `villa_categories(count)`: ilişkili satırların gövdesi taşınmadan sayılır.

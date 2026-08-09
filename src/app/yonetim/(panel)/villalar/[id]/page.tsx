@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { getAdminVilla, getVillaForEdit } from "@/lib/data/admin/villas";
 import { getRegionOptions } from "@/lib/data/admin/regions";
+import { getCategoryOptions } from "@/lib/data/admin/categories";
 import { villaStatusMeta } from "@/lib/adminMeta";
 import { villaQuality } from "@/lib/villaQuality";
 import QualityPanel from "@/components/admin/QualityPanel";
@@ -24,10 +25,11 @@ export default async function VillaDetayPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [full, detail, regions] = await Promise.all([
+  const [full, detail, regions, categoryOptions] = await Promise.all([
     getVillaForEdit(id),
     getAdminVilla(id),
     getRegionOptions(),
+    getCategoryOptions(),
   ]);
   if (!full || !detail) notFound();
 
@@ -79,7 +81,14 @@ export default async function VillaDetayPage({
             {
               id: "info",
               label: "Bilgiler",
-              content: <VillaForm villa={full} regions={regions} mode="edit" />,
+              content: (
+                <VillaForm
+                  villa={full}
+                  regions={regions}
+                  categoryOptions={categoryOptions}
+                  mode="edit"
+                />
+              ),
             },
             {
               id: "images",

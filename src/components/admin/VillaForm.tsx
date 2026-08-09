@@ -18,6 +18,7 @@ import { useUnsavedGuard } from "@/components/admin/ui/useUnsavedGuard";
 import { inputCls } from "@/components/admin/ui/styles";
 import type { AdminVillaFull } from "@/lib/data/admin/villas";
 import type { RegionOption } from "@/lib/data/admin/regions";
+import type { CategoryOption } from "@/lib/data/admin/categories";
 import CascadeRegionSelect from "@/components/admin/CascadeRegionSelect";
 
 type FormState = {
@@ -58,6 +59,7 @@ type FormState = {
   descriptionEn: string;
   videoUrl: string;
   amenities: string[];
+  categoryIds: string[];
 };
 
 /** Sayısal opsiyonel alanı forma çevirir: null/0 → boş (kural uygulanmaz). */
@@ -104,16 +106,19 @@ function fromVilla(v: AdminVillaFull | null): FormState {
     descriptionEn: v?.descriptionEn ?? "",
     videoUrl: v?.videoUrl ?? "",
     amenities: v?.amenities ?? [],
+    categoryIds: v?.categoryIds ?? [],
   };
 }
 
 export default function VillaForm({
   villa,
   regions,
+  categoryOptions,
   mode,
 }: {
   villa: AdminVillaFull | null;
   regions: RegionOption[];
+  categoryOptions: CategoryOption[];
   mode: "edit" | "create";
 }) {
   const router = useRouter();
@@ -198,6 +203,14 @@ export default function VillaForm({
       amenities: p.amenities.includes(key)
         ? p.amenities.filter((a) => a !== key)
         : [...p.amenities, key],
+    }));
+
+  const toggleCategory = (id: string) =>
+    setF((p) => ({
+      ...p,
+      categoryIds: p.categoryIds.includes(id)
+        ? p.categoryIds.filter((c) => c !== id)
+        : [...p.categoryIds, id],
     }));
 
   const submit = async () => {
@@ -503,6 +516,32 @@ export default function VillaForm({
             </label>
           ))}
         </div>
+      </Section>
+
+      <Section
+        title="Kategoriler"
+        description="Bu villanın ana sayfada ve filtrelerde hangi kategorilerde görüneceğini seçin. (Popüler, Son Dakika gibi otomatik bloklar kurala göre dolar, burada yer almaz.)"
+      >
+        {categoryOptions.length === 0 ? (
+          <p className="text-sm text-brand-900/60">Henüz kategori tanımlı değil.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {categoryOptions.map((c) => (
+              <label
+                key={c.id}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sand-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={f.categoryIds.includes(c.id)}
+                  onChange={() => toggleCategory(c.id)}
+                  className="h-4 w-4 rounded border-sand-300 text-brand-600"
+                />
+                <span className="text-brand-900">{c.nameTr}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </Section>
 
       <SaveBar
