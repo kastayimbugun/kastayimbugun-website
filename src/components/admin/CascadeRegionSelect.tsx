@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { ChevronRight, MapPin, Zap } from "lucide-react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { MapPin, Search, X, ChevronDown } from "lucide-react";
 import { inputCls } from "@/components/admin/ui/styles";
 import type { RegionOption } from "@/lib/data/admin/regions";
 
 /**
- * Modern & Esnek Bölge Seçici:
- * 1. ⚡ Hızlı Bölge Seçimi (doğrudan "Kalkan (Antalya › Kaş)" gibi tüm bölgeleri arayıp/seçme)
- * 2. 3 Kademeli Hiyerarşik Seçim (İl → İlçe → Bölge)
+ * Aranabilir tek alanlı bölge seçici.
  *
- * Her iki alan birbirini otomatik senkronize eder.
+ * Eski sürüm iki ayrı yöntemi (uzun breadcrumb'lı dev dropdown + 4 kademeli
+ * select) yan yana gösteriyordu; kalabalık ve kafa karıştırıcıydı. Artık tek
+ * bir arama kutusu var: yaz → filtrele → seç. Her sonuçta bölge adı kalın,
+ * altında konum yolu ("Antalya › Kaş › Kalkan") küçük ve gri.
  */
 export default function CascadeRegionSelect({
   regions,
@@ -31,255 +32,161 @@ export default function CascadeRegionSelect({
     return m;
   }, [regions]);
 
-  // Hiyerarşik tam yol etiketini bulma fonksiyonu (Örn: "Kalkan (Antalya › Kaş)")
-  const getRegionFullPath = useMemo(() => {
-    return (id: string) => {
-      const target = regionMap[id];
-      if (!target) return "";
-
+  /** Bölgenin ÜST yolu: ["Antalya","Kaş","Kalkan"] (kendisi hariç). */
+  const parentsOf = useMemo(() => {
+    return (id: string): string[] => {
       const parents: string[] = [];
-      let curr: RegionOption | undefined = target;
+      let curr: RegionOption | undefined = regionMap[id];
       while (curr?.parentId) {
         const parent: RegionOption | undefined = regionMap[curr.parentId];
         if (!parent) break;
         parents.unshift(parent.name);
         curr = parent;
       }
-
-      if (parents.length === 0) return target.name;
-      return `${target.name} (${parents.join(" › ")})`;
+      return parents;
     };
   }, [regionMap]);
 
-  // Hızlı seçim için tüm bölgeleri alfabetik / mantıksal sıralayalım
-  const quickOptions = useMemo(() => {
-    return [...regions].map((r) => ({
-      id: r.id,
-      name: r.name,
-      depth: r.depth,
-      fullLabel: getRegionFullPath(r.id),
-    })).sort((a, b) => a.fullLabel.localeCompare(b.fullLabel, "tr"));
-  }, [regions, getRegionFullPath]);
+  const norm = (s: string) => s.toLocaleLowerCase("tr");
 
-  // Hiyerarşiyi geri çözme (ID -> City, District, Region)
-  const resolveInitial = (id: string) => {
-    const target = regionMap[id];
-    if (!target) return { city: "", district: "", region: "" };
+  // Aranabilir seçenekler: ad + üst yol etiketi (arama her ikisinde de yapılır).
+  const options = useMemo(() => {
+    return regions
+      .map((r) => {
+        const parents = parentsOf(r.id);
+        return {
+          id: r.id,
+          name: r.name,
+          parentLabel: parents.join(" › "),
+          search: norm(`${r.name} ${parents.join(" ")}`),
+        };
+      })
+      .sort((a, b) =>
+        `${a.parentLabel} ${a.name}`.localeCompare(
+          `${b.parentLabel} ${b.name}`,
+          "tr"
+        )
+      );
+  }, [regions, parentsOf]);
 
-    if (target.depth === 0) return { city: id, district: "", region: "" };
-    if (target.depth === 1) {
-      return { city: target.parentId ?? "", district: id, region: "" };
-    }
-    // depth 2
-    const district = target.parentId ? regionMap[target.parentId] : null;
-    return {
-      city: district?.parentId ?? "",
-      district: target.parentId ?? "",
-      region: id,
-    };
-  };
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const boxRef = useRef<HTMLDivElement>(null);
 
-  const initial = resolveInitial(value);
-  const [selectedCity, setSelectedCity] = useState(initial.city);
-  const [selectedDistrict, setSelectedDistrict] = useState(initial.district);
-  const [selectedRegion, setSelectedRegion] = useState(initial.region);
-
-  // value değiştiğinde state'leri senkronize et
+  // Dışarı tıklayınca kapan.
   useEffect(() => {
-    const resolved = resolveInitial(value);
-    setSelectedCity(resolved.city);
-    setSelectedDistrict(resolved.district);
-    setSelectedRegion(resolved.region);
-  }, [value]);
+    const onDown = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
 
-  // Seviyelere göre filtrelenmiş listeler
-  const cities = useMemo(
-    () => regions.filter((r) => r.depth === 0),
-    [regions]
-  );
-  const districts = useMemo(
-    () => regions.filter((r) => r.depth === 1 && r.parentId === selectedCity),
-    [regions, selectedCity]
-  );
-  const neighborhoods = useMemo(
-    () =>
-      regions.filter(
-        (r) => r.depth === 2 && r.parentId === selectedDistrict
-      ),
-    [regions, selectedDistrict]
-  );
+  const selected = value ? regionMap[value] : null;
+  const selectedParents = value ? parentsOf(value).join(" › ") : "";
 
-  // Hızlı seçim handler
-  const handleQuickSelect = (id: string) => {
-    if (!id) {
-      setSelectedCity("");
-      setSelectedDistrict("");
-      setSelectedRegion("");
-      onChange("");
-      return;
-    }
-    const resolved = resolveInitial(id);
-    setSelectedCity(resolved.city);
-    setSelectedDistrict(resolved.district);
-    setSelectedRegion(resolved.region);
+  const filtered = useMemo(() => {
+    const q = norm(query.trim());
+    const list = q ? options.filter((o) => o.search.includes(q)) : options;
+    return list.slice(0, 60);
+  }, [options, query]);
+
+  const choose = (id: string) => {
     onChange(id);
+    setOpen(false);
+    setQuery("");
   };
-
-  const handleCityChange = (cityId: string) => {
-    setSelectedCity(cityId);
-    setSelectedDistrict("");
-    setSelectedRegion("");
-
-    const cityChildren = regions.filter((r) => r.parentId === cityId);
-    if (cityChildren.length === 0) {
-      onChange(cityId);
-    } else {
-      onChange("");
-    }
-  };
-
-  const handleDistrictChange = (districtId: string) => {
-    setSelectedDistrict(districtId);
-    setSelectedRegion("");
-
-    const districtChildren = regions.filter((r) => r.parentId === districtId);
-    if (districtChildren.length === 0) {
-      onChange(districtId);
-    } else {
-      onChange("");
-    }
-  };
-
-  const handleRegionChange = (regionId: string) => {
-    setSelectedRegion(regionId);
-    onChange(regionId);
-  };
-
-  const selectedLabel = useMemo(() => {
-    if (!value) return null;
-    const target = regionMap[value];
-    if (!target) return null;
-
-    const parts: string[] = [target.name];
-    let curr: RegionOption | undefined = target;
-    while (curr?.parentId) {
-      const parent: RegionOption | undefined = regionMap[curr.parentId];
-      if (!parent) break;
-      parts.unshift(parent.name);
-      curr = parent;
-    }
-    return parts.join(" › ");
-  }, [value, regionMap]);
 
   const baseCls = `${inputCls} ${error ? "border-rose-400" : ""}`;
 
   return (
-    <div className="space-y-3 rounded-xl border border-sand-200 bg-sand-50/50 p-3">
-      {/* 1. Hızlı Seçim Dropdown'ı */}
-      <div>
-        <label className="mb-1 flex items-center gap-1.5 text-xs font-bold text-brand-950">
-          <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-          Hızlı Bölge Seçimi
-        </label>
-        <select
-          className={baseCls}
-          value={value}
-          onChange={(e) => handleQuickSelect(e.target.value)}
+    <div ref={boxRef} className="relative">
+      {open ? (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-500" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Bölge adı yazın… (ör. Kalkan, Kaş)"
+            className={`${baseCls} pl-9`}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={`${baseCls} flex w-full items-center justify-between gap-2 text-left`}
         >
-          <option value="">⚡ Bölgeyi arayın veya listeden seçin…</option>
-          {quickOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.fullLabel}
-            </option>
-          ))}
-        </select>
-      </div>
+          {selected ? (
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <MapPin className="h-4 w-4 shrink-0 text-brand-600" />
+              <span className="min-w-0 truncate">
+                <span className="font-semibold text-brand-950">
+                  {selected.name}
+                </span>
+                {selectedParents && (
+                  <span className="ml-1.5 text-xs text-brand-900/50">
+                    {selectedParents}
+                  </span>
+                )}
+              </span>
+            </span>
+          ) : (
+            <span className="text-brand-900/45">Bölge seçin veya arayın…</span>
+          )}
+          <span className="flex shrink-0 items-center gap-1">
+            {value && (
+              <X
+                className="h-4 w-4 text-brand-900/40 hover:text-rose-500"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange("");
+                }}
+              />
+            )}
+            <ChevronDown className="h-4 w-4 text-brand-900/40" />
+          </span>
+        </button>
+      )}
 
-      {/* Seçili konum özeti */}
-      {selectedLabel && (
-        <div className="flex items-center gap-1.5 rounded-lg bg-brand-50 border border-brand-200 px-3 py-1.5 text-xs font-bold text-brand-800">
-          <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-600" />
-          <span>Seçili Konum: <strong>{selectedLabel}</strong></span>
+      {open && (
+        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-sand-200 bg-white py-1 shadow-lg">
+          {filtered.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => choose(o.id)}
+              className={`block w-full px-3 py-2 text-left transition hover:bg-brand-50 ${
+                o.id === value ? "bg-brand-50" : ""
+              }`}
+            >
+              <div className="text-sm font-semibold text-brand-950">
+                {o.name}
+              </div>
+              {o.parentLabel && (
+                <div className="text-xs text-brand-900/50">{o.parentLabel}</div>
+              )}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-3 py-4 text-center text-sm text-brand-900/50">
+              Sonuç bulunamadı.
+            </p>
+          )}
+          {!query && options.length > filtered.length && (
+            <p className="border-t border-sand-100 px-3 py-2 text-center text-[11px] text-brand-900/40">
+              {options.length} bölgeden ilk {filtered.length} tanesi — daralt için yazın.
+            </p>
+          )}
         </div>
       )}
 
-      {/* 2. Adım Adım Kademeli Seçim (İl → İlçe → Bölge) */}
-      <div className="border-t border-sand-200 pt-2.5">
-        <label className="mb-1.5 block text-[11px] font-semibold text-brand-900/60">
-          Veya adım adım hiyerarşik seçin:
-        </label>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
-          {/* Adım 1: İl */}
-          <div className="flex-1">
-            <label className="mb-1 block text-[11px] font-semibold text-brand-900/70">
-              1. İl
-            </label>
-            <select
-              className={baseCls}
-              value={selectedCity}
-              onChange={(e) => handleCityChange(e.target.value)}
-            >
-              <option value="">İl seçin…</option>
-              {cities.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Adım 2: İlçe */}
-          {selectedCity && districts.length > 0 && (
-            <>
-              <ChevronRight className="hidden h-4 w-4 shrink-0 text-brand-400 sm:block sm:mt-4" />
-              <div className="flex-1">
-                <label className="mb-1 block text-[11px] font-semibold text-brand-900/70">
-                  2. İlçe
-                </label>
-                <select
-                  className={baseCls}
-                  value={selectedDistrict}
-                  onChange={(e) => handleDistrictChange(e.target.value)}
-                >
-                  <option value="">İlçe seçin…</option>
-                  {districts.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* Adım 3: Bölge */}
-          {selectedDistrict && neighborhoods.length > 0 && (
-            <>
-              <ChevronRight className="hidden h-4 w-4 shrink-0 text-brand-400 sm:block sm:mt-4" />
-              <div className="flex-1">
-                <label className="mb-1 block text-[11px] font-semibold text-brand-900/70">
-                  3. Bölge
-                </label>
-                <select
-                  className={baseCls}
-                  value={selectedRegion}
-                  onChange={(e) => handleRegionChange(e.target.value)}
-                >
-                  <option value="">Bölge seçin…</option>
-                  {neighborhoods.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
       {error && (
-        <p className="text-xs font-semibold text-rose-600">{error}</p>
+        <p className="mt-1 text-xs font-semibold text-rose-600">{error}</p>
       )}
     </div>
   );

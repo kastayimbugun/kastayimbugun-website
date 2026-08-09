@@ -1,8 +1,33 @@
 import type { NextConfig } from "next";
 
+// Supabase Storage'ın TAM host adı ortam değişkeninden türetilir. Wildcard
+// (`*.supabase.co`) bu Next sürümünde host'u eşleştiremeyip `_next/image`'ı
+// 400'e düşürüyordu; panelden yüklenen gerçek fotoğraflar bu yüzden görünmüyordu.
+const supabaseHostname = (() => {
+  try {
+    const raw = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(
+      /^["']|["']$/g,
+      ""
+    );
+    return new URL(raw).hostname;
+  } catch {
+    return "";
+  }
+})();
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
+      // Tam host (ör. loxtmqhfhbnvxfqctnyn.supabase.co) — panelden yüklenen görseller.
+      ...(supabaseHostname
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: supabaseHostname,
+              pathname: "/storage/v1/object/public/**",
+            },
+          ]
+        : []),
       {
         protocol: "https",
         hostname: "*.supabase.co",

@@ -15,6 +15,7 @@ import {
 import {
   uploadImage,
   deleteImage,
+  deleteImages,
   reorderImage,
   reorderImages,
   updateImageAlt,
@@ -60,6 +61,41 @@ export default function ImageManager({
   // Sürükle-bırak: taşınan görselin id'si + dosya sürükleme vurgusu.
   const [dragId, setDragId] = useState<string | null>(null);
   const [fileDragOver, setFileDragOver] = useState(false);
+  // Toplu seçim
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allSelected = images.length > 0 && selected.size === images.length;
+  const toggleSelectAll = () =>
+    setSelected(allSelected ? new Set() : new Set(images.map((x) => x.id)));
+
+  const bulkDelete = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const ok = await confirm({
+      title: `${ids.length} görsel silinsin mi?`,
+      body: "Seçili dosyalar kalıcı olarak silinir, geri alınamaz.",
+      confirmLabel: "Sil",
+      tone: "danger",
+    });
+    if (!ok) return;
+    start(async () => {
+      const res = await deleteImages({ villaId, ids });
+      if (res.ok) {
+        toast.success(`${ids.length} görsel silindi.`);
+        setSelected(new Set());
+      } else {
+        toast.error(errorText(res));
+      }
+      router.refresh();
+    });
+  };
 
   /** İstemcide sıralı id listesini sunucuya yazar (sürükle-bırak / kapak yap). */
   const persistOrder = (orderedIds: string[]) => {
@@ -221,6 +257,42 @@ export default function ImageManager({
             Sürükleyerek sıralayın. İlk görsel kapak olur; başka bir görseli
             kapak yapmak için ★ düğmesine basın.
           </p>
+
+          {/* Toplu seçim çubuğu */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-brand-900/80">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-sand-300 text-brand-600 focus:ring-brand-500"
+              />
+              Tümünü seç
+            </label>
+            {selected.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-brand-800">
+                  {selected.size} seçili
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="rounded-lg border border-sand-200 px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-sand-50"
+                >
+                  Temizle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void bulkDelete()}
+                  disabled={pending}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Seçilenleri sil
+                </button>
+              </div>
+            )}
+          </div>
+
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {images.map((img, i) => (
               <li
@@ -233,6 +305,8 @@ export default function ImageManager({
                 className={`overflow-hidden rounded-xl border bg-white transition ${
                   dragId === img.id
                     ? "border-brand-500 opacity-50"
+                    : selected.has(img.id)
+                    ? "border-brand-500 ring-2 ring-brand-400"
                     : "border-sand-200"
                 }`}
               >
@@ -264,6 +338,18 @@ export default function ImageManager({
                       Kapak yap
                     </button>
                   )}
+                  {/* Toplu seçim kutusu */}
+                  <label
+                    className="absolute bottom-2 left-2 flex cursor-pointer items-center rounded-md bg-white/85 p-1 shadow-sm ring-1 ring-black/5 backdrop-blur-sm"
+                    title="Toplu silmek için seç"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(img.id)}
+                      onChange={() => toggleSelect(img.id)}
+                      className="h-4 w-4 rounded border-sand-300 text-brand-600 focus:ring-brand-500"
+                    />
+                  </label>
                   {busyId === img.id && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/60">
                       <Loader2 className="h-5 w-5 animate-spin text-brand-600" />

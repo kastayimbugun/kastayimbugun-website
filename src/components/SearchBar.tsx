@@ -268,14 +268,27 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
                               </option>
                             );
 
-                            const neighborhoodOptions = neighborhoods.map((n) => (
-                              <option
-                                key={n.slug}
-                                value={`${districtPath}/${n.slug}`}
-                              >
-                                &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
-                              </option>
-                            ));
+                            const neighborhoodOptions = neighborhoods.flatMap((n) => {
+                              const subRegions = childMap.get(n.id) ?? [];
+                              const nPath = `${districtPath}/${n.slug}`;
+
+                              const nOpt = (
+                                <option key={n.slug} value={nPath}>
+                                  &nbsp;&nbsp;&nbsp;&nbsp;• {n.name} {subRegions.length > 0 ? "(Tüm Bölge)" : ""}
+                                </option>
+                              );
+
+                              const subOpts = subRegions.map((sub) => (
+                                <option
+                                  key={sub.slug}
+                                  value={`${nPath}/${sub.slug}`}
+                                >
+                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;◦ {sub.name}
+                                </option>
+                              ));
+
+                              return [nOpt, ...subOpts];
+                            });
 
                             return [districtOption, ...neighborhoodOptions];
                           })}

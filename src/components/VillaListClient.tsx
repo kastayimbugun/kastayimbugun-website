@@ -222,11 +222,23 @@ export default function VillaListClient({
                       </option>
                     );
 
-                    const neighborhoodOptions = neighborhoods.map((n) => (
-                      <option key={n.slug} value={n.slug}>
-                        &nbsp;&nbsp;&nbsp;&nbsp;• {n.name}
-                      </option>
-                    ));
+                    const neighborhoodOptions = neighborhoods.flatMap((n) => {
+                      const subRegions = childMap.get(n.id) ?? [];
+
+                      const nOpt = (
+                        <option key={n.slug} value={n.slug}>
+                          &nbsp;&nbsp;&nbsp;&nbsp;• {n.name} {subRegions.length > 0 ? "(Tüm Bölge)" : ""}
+                        </option>
+                      );
+
+                      const subOpts = subRegions.map((sub) => (
+                        <option key={sub.slug} value={sub.slug}>
+                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;◦ {sub.name}
+                        </option>
+                      ));
+
+                      return [nOpt, ...subOpts];
+                    });
 
                     return [districtOption, ...neighborhoodOptions];
                   })}

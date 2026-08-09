@@ -54,8 +54,12 @@ export interface AdminRegion {
   depth: number;
 }
 
+export type AdminNeighborhoodNode = AdminRegion & {
+  subRegions?: AdminRegion[];
+};
+
 export type AdminDistrictNode = AdminRegion & {
-  neighborhoods: AdminRegion[];
+  neighborhoods: AdminNeighborhoodNode[];
 };
 
 export type AdminCityNode = AdminRegion & {
@@ -177,7 +181,7 @@ export async function getAdminRegions(): Promise<AdminRegion[]> {
   }));
 }
 
-/** 3 Seviyeli Ağaç yapısına dönüştür: İl (0) → İlçe (1) → Bölge/Belde (2). */
+/** Seviyeli Ağaç yapısına dönüştür: İl (0) → İlçe (1) → Bölge/Belde (2) → Alt Bölge/Mevki (3). */
 export async function getAdminRegionTree(): Promise<AdminRegionTree3Level> {
   const all = await getAdminRegions();
 
@@ -203,7 +207,10 @@ export async function getAdminRegionTree(): Promise<AdminRegionTree3Level> {
       if (children.length > 0 || r.depth === 0) {
         const districts: AdminDistrictNode[] = children.map((district) => ({
           ...district,
-          neighborhoods: childMap.get(district.id) ?? [],
+          neighborhoods: (childMap.get(district.id) ?? []).map((neighborhood) => ({
+            ...neighborhood,
+            subRegions: childMap.get(neighborhood.id) ?? [],
+          })),
         }));
 
         cities.push({
@@ -224,13 +231,13 @@ export async function getAdminRegionTree(): Promise<AdminRegionTree3Level> {
   return { cities, orphans };
 }
 
-/** Formlarda "Üst Bölge" seçebilmek için İl ve İlçe opsiyonları getirir. */
+/** Formlarda "Üst Bölge" seçebilmek için İl, İlçe ve Bölge opsiyonları getirir. */
 export async function getRegionParentOptions(): Promise<{ id: string; label: string; depth: number }[]> {
   const all = await getAdminRegions();
   const map = new Map(all.map((r) => [r.id, r]));
 
-  // Sadece depth 0 (İl) veya depth 1 (İlçe) olanlar üst bölge seçilebilir.
-  const parentable = all.filter((r) => r.depth < 2);
+  // Sadece depth < 3 (İl, İlçe, Bölge) olanlar üst bölge seçilebilir.
+  const parentable = all.filter((r) => r.depth < 3);
 
   return parentable.map((r) => {
     let label = r.name;
@@ -239,6 +246,11 @@ export async function getRegionParentOptions(): Promise<{ id: string; label: str
     } else if (r.depth === 1) {
       const parent = r.parentId ? map.get(r.parentId) : null;
       label = parent ? `${parent.name} > ${r.name} (İlçe)` : `${r.name} (İlçe)`;
+    } else if (r.depth === 2) {
+      const parent = r.parentId ? map.get(r.parentId) : null;
+      const grandParent = parent?.parentId ? map.get(parent.parentId) : null;
+      const prefix = [grandParent?.name, parent?.name].filter(Boolean).join(" > ");
+      label = prefix ? `${prefix} > ${r.name} (Bölge)` : `${r.name} (Bölge)`;
     }
 
     return {

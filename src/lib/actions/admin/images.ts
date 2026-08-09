@@ -152,6 +152,54 @@ export async function deleteImage(input: {
   return { ok: true };
 }
 
+/**
+ * Birden çok görseli tek seferde siler (toplu seçim). Yalnızca verilen villaya
+ * ait id'ler silinir — istemciden gelen id'ler doğrulanır. DB kaydı ve Storage
+ * dosyası birlikte temizlenir.
+ */
+export async function deleteImages(input: {
+  villaId: string;
+  ids: string[];
+}): Promise<ImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+  if (
+    !input.villaId ||
+    !Array.isArray(input.ids) ||
+    input.ids.length === 0
+  ) {
+    return { ok: false, error: "validation" };
+  }
+
+  const supabase = await supabaseSession();
+  // Silinecek satırların yolları — yalnızca bu villaya ait olanlar.
+  const { data: rows, error: selErr } = await supabase
+    .from("villa_images")
+    .select("id, storage_path")
+    .eq("villa_id", input.villaId)
+    .in("id", input.ids);
+  if (selErr) return { ok: false, error: "generic" };
+  const validIds = (rows ?? []).map((r) => r.id as string);
+  if (validIds.length === 0) return { ok: false, error: "validation" };
+
+  const { error: delErr } = await supabase
+    .from("villa_images")
+    .delete()
+    .eq("villa_id", input.villaId)
+    .in("id", validIds);
+  if (delErr) return { ok: false, error: "generic" };
+
+  const paths = (rows ?? [])
+    .map((r) => r.storage_path as string)
+    .filter((p) => p && !p.startsWith("http"));
+  if (paths.length > 0) {
+    await supabase.storage.from("villa-images").remove(paths);
+  }
+
+  await revalidateVilla(supabase, input.villaId);
+  return { ok: true };
+}
+
 export async function updateImageAlt(input: unknown): Promise<ImageResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "auth" };

@@ -77,7 +77,13 @@ export default function RegionForm({
   const currentDepth = selectedParent ? selectedParent.depth + 1 : 0;
 
   const levelName =
-    currentDepth === 0 ? "İl (Şehir)" : currentDepth === 1 ? "İlçe" : "Bölge / Belde / Köy";
+    currentDepth === 0
+      ? "İl (Şehir)"
+      : currentDepth === 1
+      ? "İlçe"
+      : currentDepth === 2
+      ? "Bölge / Belde"
+      : "Alt Bölge / Özel Bölge / Mevki";
 
   const submit = () => {
     setErrors({});
@@ -131,9 +137,9 @@ export default function RegionForm({
       <Section title={`${levelName} Bilgisi`}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Üst Konum (İl veya İlçe)"
+            label="Üst Konum (İl, İlçe veya Bölge)"
             error={errors.parentId}
-            hint="Boş bırakılırsa en üst seviyede İl (Şehir) olarak eklenir."
+            hint="İl eklemek için boş bırakın. İlçe için İl, Bölge için İlçe, Alt Bölge/Mevki için Bölge (Örn: Kalkan) seçin."
           >
             <select
               className={inputCls}

@@ -44,6 +44,10 @@ export default function RegionTreeClient({
 
         district.neighborhoods.forEach((neighborhood) => {
           list.push({ ...neighborhood, parentId: district.id, depth: 2 });
+
+          (neighborhood.subRegions ?? []).forEach((sub) => {
+            list.push({ ...sub, parentId: neighborhood.id, depth: 3 });
+          });
         });
       });
     });
@@ -77,12 +81,13 @@ export default function RegionTreeClient({
 
     setDragOverIdx(targetIndex);
 
-    // Hedef elemanın üzerindeki dikey konuma göre "inside" (içine ekle) veya "after" (altına ekle) modu
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
+    const offsetX = e.clientX - rect.left;
     const height = rect.height;
 
-    if (offsetY > height * 0.25 && offsetY < height * 0.75) {
+    // Sağa sürükleme (offsetX > 45) VEYA kartın ortasına gelme -> Üsttekinin Alt Bölgesi Yap (inside)
+    if (offsetX > 45 || (offsetY > height * 0.25 && offsetY < height * 0.75)) {
       setDropMode("inside");
     } else if (offsetY <= height * 0.25) {
       setDropMode("before");
@@ -97,24 +102,63 @@ export default function RegionTreeClient({
     if (draggedIdx === null || draggedIdx === targetIndex) return;
 
     const nextItems = [...items];
-    const [draggedItem] = nextItems.splice(draggedIdx, 1);
-    const targetItem = items[targetIndex];
+    const draggedItem = nextItems[draggedIdx];
+
+    // Sürüklenen öğenin tüm alt çocuklarını bul (bütünlüklü ağaç bloku)
+    let blockCount = 1;
+    for (let i = draggedIdx + 1; i < nextItems.length; i++) {
+      if (nextItems[i].depth > draggedItem.depth) {
+        blockCount++;
+      } else {
+        break;
+      }
+    }
+
+    const draggedBlock = nextItems.splice(draggedIdx, blockCount);
+
+    // Splice sonrası hedef indeksi güncelle
+    let adjustedTargetIdx = targetIndex;
+    if (draggedIdx < targetIndex) {
+      adjustedTargetIdx -= blockCount;
+    }
+
+    const targetItem = nextItems[adjustedTargetIdx];
+    if (!targetItem) return;
+
+    let newDepth = targetItem.depth;
+    let newParentId = targetItem.parentId;
 
     if (dropMode === "inside") {
-      // Hedef elemanın alt seviyesine (child) yap
-      const newDepth = Math.min(targetItem.depth + 1, 2);
-      draggedItem.parentId = targetItem.id;
-      draggedItem.depth = newDepth;
-      nextItems.splice(targetIndex + 1, 0, draggedItem);
-    } else if (dropMode === "before") {
-      draggedItem.parentId = targetItem.parentId;
-      draggedItem.depth = targetItem.depth;
-      nextItems.splice(targetIndex, 0, draggedItem);
-    } else {
-      draggedItem.parentId = targetItem.parentId;
-      draggedItem.depth = targetItem.depth;
-      nextItems.splice(targetIndex + 1, 0, draggedItem);
+      newDepth = Math.min(targetItem.depth + 1, 3);
+      newParentId = targetItem.id;
+    } else if (dropMode === "before" || dropMode === "after") {
+      newDepth = targetItem.depth;
+      newParentId = targetItem.parentId;
     }
+
+    const depthDelta = newDepth - draggedBlock[0].depth;
+    draggedBlock[0].parentId = newParentId;
+
+    // Tüm blok elemanlarının derinliğini güncelle
+    draggedBlock.forEach((item) => {
+      item.depth = Math.min(Math.max(item.depth + depthDelta, 0), 3);
+    });
+
+    let insertIdx = adjustedTargetIdx;
+    if (dropMode === "before") {
+      insertIdx = adjustedTargetIdx;
+    } else if (dropMode === "inside" || dropMode === "after") {
+      // Hedef ögenin mevcut tüm alt çocuklarının sonuna ekle
+      insertIdx = adjustedTargetIdx + 1;
+      while (
+        insertIdx < nextItems.length &&
+        nextItems[insertIdx].depth > targetItem.depth
+      ) {
+        insertIdx++;
+      }
+    }
+
+    nextItems.splice(insertIdx, 0, ...draggedBlock);
 
     setItems(nextItems);
     setDraggedIdx(null);
@@ -130,7 +174,7 @@ export default function RegionTreeClient({
   const handleIndent = (index: number) => {
     if (index <= 0) return;
     const prevItem = items[index - 1];
-    if (prevItem.depth >= 2) return; // Maksimum depth 2
+    if (prevItem.depth >= 3) return; // Maksimum depth 3
 
     const nextItems = [...items];
     const curr = { ...nextItems[index] };
@@ -171,9 +215,9 @@ export default function RegionTreeClient({
       const res = await updateRegionsTreeOrder(payload);
       if (res.ok) {
         setSavedItems(items);
-        toast.success("Hiyerarşi ve sıralama kaydedildi.");
+        toast.success("Bölge ağacı ve sıralaması kaydedildi.");
       } else {
-        toast.error("Sıralama kaydedilemedi.");
+        toast.error("Kaydedilemedi.");
       }
     });
   };
@@ -184,16 +228,16 @@ export default function RegionTreeClient({
         e.preventDefault();
         handleSave();
       }}
-      className="space-y-6"
+      className="space-y-4"
     >
-      <div className="rounded-2xl border border-sand-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="mb-4 flex items-center justify-between border-b border-sand-200 pb-3">
-          <div>
-            <h3 className="font-bold text-brand-950">Konum Hiyerarşisi Düzenleyici</h3>
-            <p className="text-xs text-brand-900/60">
-              Bölgeleri tutup başka bir konumun **içine/üstüne** bırakarak veya **ok tuşlarıyla (← →)** seviyesini (İl, İlçe, Bölge) değiştirebilirsiniz.
-            </p>
-          </div>
+      <div className="rounded-2xl border border-sand-200 bg-white p-4">
+        <div className="mb-3 flex items-center justify-between text-xs text-brand-900/60">
+          <span>
+            Sürükleyerek sırasını veya üst konumunu değiştirin. Sağ/sol ok butonlarıyla hızlıca alt bölge yapabilir veya üst seviyeye çıkarabilirsiniz.
+          </span>
+          <span className="font-semibold text-brand-950">
+            Toplam {items.length} konum
+          </span>
         </div>
 
         <div className="space-y-2">
@@ -215,20 +259,42 @@ export default function RegionTreeClient({
 
             // Seviyeye göre ikon ve stil
             const levelLabel =
-              item.depth === 0 ? "İl" : item.depth === 1 ? "İlçe" : "Bölge";
+              item.depth === 0
+                ? "İl"
+                : item.depth === 1
+                ? "İlçe"
+                : item.depth === 2
+                ? "Bölge"
+                : "Alt Bölge";
             const levelBadgeCls =
               item.depth === 0
                 ? "bg-brand-100 text-brand-800 border-brand-200"
                 : item.depth === 1
                 ? "bg-amber-100 text-amber-900 border-amber-200"
-                : "bg-emerald-100 text-emerald-900 border-emerald-200";
+                : item.depth === 2
+                ? "bg-emerald-100 text-emerald-900 border-emerald-200"
+                : "bg-purple-100 text-purple-900 border-purple-200";
 
             const Icon =
               item.depth === 0 ? Building2 : item.depth === 1 ? Map : MapPin;
 
             // Derinliğe göre girinti (indentation)
             const indentMargin =
-              item.depth === 1 ? "ml-6 sm:ml-10" : item.depth === 2 ? "ml-12 sm:ml-20" : "";
+              item.depth === 1
+                ? "ml-5 sm:ml-8"
+                : item.depth === 2
+                ? "ml-10 sm:ml-16"
+                : item.depth >= 3
+                ? "ml-15 sm:ml-24"
+                : "";
+
+            const dragOverStyle = isDragOver
+              ? dropMode === "inside"
+                ? "border-2 border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200"
+                : dropMode === "before"
+                ? "border-t-4 border-t-brand-600 border-sand-200 bg-brand-50/70"
+                : "border-b-4 border-b-brand-600 border-sand-200 bg-brand-50/70"
+              : "border-sand-200 bg-white hover:border-brand-300 hover:shadow-sm";
 
             return (
               <div
@@ -241,11 +307,7 @@ export default function RegionTreeClient({
                 className={`group flex items-center justify-between gap-3 rounded-xl border p-3 transition ${indentMargin} ${
                   isDragging
                     ? "border-dashed border-brand-400 bg-brand-50 opacity-40"
-                    : isDragOver
-                    ? dropMode === "inside"
-                      ? "border-2 border-emerald-500 bg-emerald-50"
-                      : "border-2 border-brand-500 bg-brand-50"
-                    : "border-sand-200 bg-white hover:border-brand-300 hover:shadow-sm"
+                    : dragOverStyle
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -269,7 +331,7 @@ export default function RegionTreeClient({
 
                   {/* İsim ve Bilgi */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={`/yonetim/bolgeler/${item.id}`}
                         className="font-bold text-sm text-brand-950 hover:underline truncate"
@@ -281,6 +343,21 @@ export default function RegionTreeClient({
                       >
                         {levelLabel}
                       </span>
+                      {isDragOver && (
+                        <span
+                          className={`rounded px-2 py-0.5 text-[10px] font-bold text-white shadow-sm ${
+                            dropMode === "inside"
+                              ? "bg-emerald-600 animate-pulse"
+                              : "bg-brand-600"
+                          }`}
+                        >
+                          {dropMode === "inside"
+                            ? `↳ ${item.name} İçine (Alt Bölge Olarak) Ekle`
+                            : dropMode === "before"
+                            ? `↑ ${item.name} Üstüne Sırala`
+                            : `↓ ${item.name} Altına Sırala`}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-brand-900/60">
                       {totalVillaCount} villa{totalVillaCount !== item.villaCount && ` (doğrudan ${item.villaCount})`} · Sıra #{index}
@@ -303,7 +380,7 @@ export default function RegionTreeClient({
                   )}
 
                   {/* İçeri Girintile (Indent) */}
-                  {item.depth < 2 && index > 0 && (
+                  {item.depth < 3 && index > 0 && (
                     <button
                       type="button"
                       onClick={() => handleIndent(index)}
