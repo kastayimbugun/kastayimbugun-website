@@ -12,6 +12,8 @@ import {
   removeSiteHero,
   uploadSiteLogo,
   removeSiteLogo,
+  uploadSiteFavicon,
+  removeSiteFavicon,
   uploadSiteOgImage,
   removeSiteOgImage,
   uploadAdWebImage,
@@ -375,6 +377,21 @@ export default function SiteSettingsForm({
             aspect="aspect-[3/1]"
             onUpload={uploadSiteLogo}
             onRemove={removeSiteLogo}
+          />
+        </div>
+      </Section>
+
+      <Section title="Site Faviconu (Tarayıcı İkonu)">
+        <p className="mb-3 text-sm text-brand-900/70">
+          Tarayıcı sekmelerinde, sık kullanılanlar ve mobil kısayollarda görünen küçük ikon. Kare biçiminde PNG, ICO veya SVG önerilir.
+        </p>
+        <div className="max-w-[120px]">
+          <ImageUploadField
+            url={settings.faviconImageUrl}
+            alt="Site faviconu"
+            aspect="aspect-square"
+            onUpload={uploadSiteFavicon}
+            onRemove={removeSiteFavicon}
           />
         </div>
       </Section>

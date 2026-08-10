@@ -26,6 +26,7 @@ export interface SiteSettings {
   heroImage: string | null;
   heroVideoUrl: string | null;
   logoImage: string | null;
+  faviconImage: string | null;
   ogImage: string | null;
   brandName: string | null;
   agencyName: string | null;
@@ -60,6 +61,7 @@ const EMPTY: SiteSettings = {
   heroImage: null,
   heroVideoUrl: null,
   logoImage: null,
+  faviconImage: null,
   ogImage: null,
   brandName: null,
   agencyName: null,
@@ -89,7 +91,7 @@ const EMPTY: SiteSettings = {
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-  const base = `hero_image, hero_video_url, logo_image, og_image,
+  const base = `hero_image, hero_video_url, logo_image, favicon_image, og_image,
        brand_name, agency_name, tursab_no,
        phone, whatsapp, email, address, instagram_url, facebook_url,
        hero_title_tr, hero_title_en, hero_subtitle_tr, hero_subtitle_en,
@@ -102,11 +104,11 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     .select(extended)
     .maybeSingle();
 
-  // Yeni kolonlar (0013/0014/0015) yoksa diğer tüm ayarları kaybetmemek için
+  // Yeni kolonlar (0013/0014/0015/0016) yoksa diğer tüm ayarları kaybetmemek için
   // minimal şemayla tekrar dene.
   if (
     q.error &&
-    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config/.test(
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config|favicon_image/.test(
       q.error.message ?? ""
     )
   ) {
@@ -122,6 +124,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     heroImage: imageUrl(r.hero_image),
     heroVideoUrl: r.hero_video_url || null,
     logoImage: imageUrl(r.logo_image),
+    faviconImage: imageUrl(r.favicon_image),
     ogImage: imageUrl(r.og_image),
     brandName: r.brand_name || null,
     agencyName: r.agency_name || null,

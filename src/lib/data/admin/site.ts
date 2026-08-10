@@ -43,6 +43,8 @@ export interface AdminSiteSettings extends SiteSettingsText {
   heroVideoUrl: string | null;
   logoImagePath: string | null;
   logoImageUrl: string | null;
+  faviconImagePath: string | null;
+  faviconImageUrl: string | null;
   ogImagePath: string | null;
   ogImageUrl: string | null;
   villaDetailPrefs: VillaDetailPrefs;
@@ -63,7 +65,7 @@ export interface AdminSiteSettings extends SiteSettingsText {
 /** Panelin okuduğu tüm site ayarları (tek satırlık `site_settings`). */
 export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
   const supabase = await supabaseSession();
-  const base = `hero_image, hero_video_url, logo_image, og_image,
+  const base = `hero_image, hero_video_url, logo_image, favicon_image, og_image,
        brand_name, agency_name, tursab_no,
        phone, whatsapp, email, address, instagram_url, facebook_url,
        hero_title_tr, hero_title_en, hero_subtitle_tr, hero_subtitle_en,
@@ -86,10 +88,10 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
     q = await supabase.from("site_settings").select(withoutWatermark).maybeSingle();
   }
 
-  // Yeni kolonlar (0013/0014) yoksa diğer ayarları kaybetmemek için minimal dene.
+  // Yeni kolonlar (0013/0014/0016) yoksa diğer ayarları kaybetmemek için minimal dene.
   if (
     q.error &&
-    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config/.test(
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config|favicon_image/.test(
       q.error.message ?? ""
     )
   ) {
@@ -107,6 +109,8 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
     heroVideoUrl: r.hero_video_url ?? null,
     logoImagePath: r.logo_image ?? null,
     logoImageUrl: imageUrl(r.logo_image),
+    faviconImagePath: r.favicon_image ?? null,
+    faviconImageUrl: imageUrl(r.favicon_image),
     ogImagePath: r.og_image ?? null,
     ogImageUrl: imageUrl(r.og_image),
 

@@ -34,6 +34,7 @@ export type SiteSettingsResult =
 type ImageColumn =
   | "hero_image"
   | "logo_image"
+  | "favicon_image"
   | "og_image"
   | "ad_web_image"
   | "ad_mobile_image";
@@ -123,6 +124,15 @@ export async function uploadSiteLogo(formData: FormData): Promise<SiteResult> {
 
 export async function removeSiteLogo(): Promise<SiteResult> {
   return removeSettingImage("logo_image");
+}
+
+/** Tarayıcı sekmelerinde görünen ikona (Favicon). */
+export async function uploadSiteFavicon(formData: FormData): Promise<SiteResult> {
+  return uploadSettingImage("favicon_image", "site/favicon", formData.get("file"), true);
+}
+
+export async function removeSiteFavicon(): Promise<SiteResult> {
+  return removeSettingImage("favicon_image");
 }
 
 /** Sosyal medyada paylaşılınca görünen kart görseli. */
