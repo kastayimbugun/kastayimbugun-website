@@ -38,6 +38,8 @@ const nextConfig: NextConfig = {
       // yüklenince BU İKİ SATIRI SİL; Faz 3 ondan önce bitmiş sayılmaz.
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "www.kastayimbugunvillalari.com" },
+      { protocol: "https", hostname: "kastayimbugunvillalari.com" },
     ],
     // Next 16'da izin verilen kalite listesi açıkça yazılır.
     qualities: [75],

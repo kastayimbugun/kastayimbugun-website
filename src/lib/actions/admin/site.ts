@@ -223,6 +223,10 @@ export async function saveSiteSettings(
     ad_link_url: d.adLinkUrl,
     header_config: resolveHeaderConfig(d.headerConfig),
     footer_config: resolveFooterConfig(d.footerConfig),
+    watermark_enabled: d.watermarkEnabled,
+    watermark_opacity: d.watermarkOpacity,
+    watermark_scale: d.watermarkScale,
+    watermark_position: d.watermarkPosition,
   };
 
   let { error } = await supabase.from("site_settings").upsert(row);
@@ -231,7 +235,7 @@ export async function saveSiteSettings(
   // engellememek için bu alanlar olmadan tekrar dene.
   if (
     error &&
-    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_link_url|header_config|footer_config/.test(
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_link_url|header_config|footer_config|watermark_/.test(
       error.message ?? ""
     )
   ) {
@@ -242,9 +246,13 @@ export async function saveSiteSettings(
       ad_link_url: _l,
       header_config: _h,
       footer_config: _f,
+      watermark_enabled: _we,
+      watermark_opacity: _wo,
+      watermark_scale: _ws,
+      watermark_position: _wp,
       ...rest
     } = row;
-    void [_p, _w, _m, _l, _h, _f];
+    void [_p, _w, _m, _l, _h, _f, _we, _wo, _ws, _wp];
     ({ error } = await supabase.from("site_settings").upsert(rest));
   }
 

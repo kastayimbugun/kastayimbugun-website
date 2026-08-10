@@ -11,7 +11,7 @@ export const categoryFormSchema = z.object({
   descEn: z.preprocess(emptyToNull, z.string().max(300).nullable()),
   color: z.enum(["sky", "amber", "rose", "emerald", "violet", "teal"]),
   icon: z.string().trim().min(1, "İkon seçin").max(40),
-  image: z.preprocess(emptyToNull, z.url().nullable()),
+  image: z.preprocess(emptyToNull, z.string().nullable()),
   featuredOnHome: z.coerce.boolean(),
 });
 

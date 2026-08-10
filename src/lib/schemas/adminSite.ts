@@ -106,6 +106,12 @@ export const siteSettingsSchema = z.object({
   // edilir (bilinmeyen anahtarlar atılır), o yüzden gevşek doğrulama yeterli.
   headerConfig: z.unknown().optional(),
   footerConfig: z.unknown().optional(),
+
+  // Filigran (watermark) ayarları — fotoğraflar sunucuya yüklenirken logo otomatik eklenir.
+  watermarkEnabled: z.boolean().default(true),
+  watermarkOpacity: z.number().min(0).max(1).default(0.35),
+  watermarkScale: z.number().min(0.1).max(1).default(0.45),
+  watermarkPosition: z.enum(["center", "bottom-right", "bottom-left", "top-right", "top-left"]).default("center"),
 });
 
 export type SiteSettingsInput = z.infer<typeof siteSettingsSchema>;

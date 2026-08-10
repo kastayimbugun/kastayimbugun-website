@@ -53,6 +53,11 @@ export interface AdminSiteSettings extends SiteSettingsText {
   adLinkUrl: string | null;
   headerConfig: HeaderConfig;
   footerConfig: FooterConfig;
+  // Filigran
+  watermarkEnabled: boolean;
+  watermarkOpacity: number;
+  watermarkScale: number;
+  watermarkPosition: "center" | "bottom-right" | "bottom-left" | "top-right" | "top-left";
 }
 
 /** Panelin okuduğu tüm site ayarları (tek satırlık `site_settings`). */
@@ -65,14 +70,23 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
        seo_title_tr, seo_title_en, seo_description_tr, seo_description_en,
        confirmation_deposit_note, confirmation_checkin_note`;
 
-  const extended = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config`;
+  const withoutWatermark = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config`;
+  const extended = `${withoutWatermark}, watermark_enabled, watermark_opacity, watermark_scale, watermark_position`;
 
   let q = await supabase
     .from("site_settings")
     .select(extended)
     .maybeSingle();
 
-  // Yeni kolonlar (0013/0014/0015) yoksa diğer ayarları kaybetmemek için minimal dene.
+  // watermark kolonları (0015) henüz yoksa bunlar olmadan dene.
+  if (
+    q.error &&
+    /watermark_/.test(q.error.message ?? "")
+  ) {
+    q = await supabase.from("site_settings").select(withoutWatermark).maybeSingle();
+  }
+
+  // Yeni kolonlar (0013/0014) yoksa diğer ayarları kaybetmemek için minimal dene.
   if (
     q.error &&
     /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config/.test(
@@ -123,5 +137,11 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
     adLinkUrl: (r.ad_link_url as string | null) ?? null,
     headerConfig: resolveHeaderConfig(r.header_config),
     footerConfig: resolveFooterConfig(r.footer_config),
+    watermarkEnabled: (r.watermark_enabled as unknown) !== false, // default true
+    watermarkOpacity: typeof r.watermark_opacity === "number" ? r.watermark_opacity : 0.35,
+    watermarkScale: typeof r.watermark_scale === "number" ? r.watermark_scale : 0.45,
+    watermarkPosition: (["center","bottom-right","bottom-left","top-right","top-left"].includes(r.watermark_position as string)
+      ? r.watermark_position
+      : "center") as AdminSiteSettings["watermarkPosition"],
   };
 }

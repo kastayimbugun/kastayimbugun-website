@@ -75,7 +75,7 @@ export default function HomeClient({
       <section className="relative z-20">
         <HeroMedia image={heroImage} videoUrl={site.heroVideoUrl} />
 
-        <div className="relative mx-auto max-w-7xl px-4 pb-8 pt-16 sm:px-6 sm:pt-20">
+        <div className="relative mx-auto max-w-7xl px-8 pb-8 pt-16 sm:px-10 sm:pt-20">
           <div className="animate-fade-up text-center">
             <h1 className="title-gradient mx-auto max-w-4xl text-4xl font-extrabold leading-tight sm:text-5xl md:text-[3.5rem]">
               {heroTitle}
@@ -104,7 +104,7 @@ export default function HomeClient({
       />
 
       {/* FEATURED */}
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <section className="mx-auto max-w-7xl px-8 py-8 sm:px-10">
         <div className="flex items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">
@@ -141,7 +141,7 @@ export default function HomeClient({
 
       {/* REGIONS */}
       <section id="regions" className="bg-sand-50 py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="mx-auto max-w-7xl px-8 sm:px-10">
           <div className="text-center">
             <h2 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">
               {t("home.regions")}
@@ -212,7 +212,7 @@ export default function HomeClient({
       </section>
 
       {/* WHY US */}
-      <section id="about" className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+      <section id="about" className="mx-auto max-w-7xl px-8 py-16 sm:px-10">
         <h2 className="text-center text-2xl font-extrabold text-brand-950 sm:text-3xl">
           {t("home.whyTitle")}
         </h2>
@@ -235,7 +235,7 @@ export default function HomeClient({
       </section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-7xl px-4 pb-4 sm:px-6">
+      <section className="mx-auto max-w-7xl px-8 pb-4 sm:px-10">
         <div className="relative overflow-hidden rounded-3xl bg-brand-800 px-6 py-14 text-center sm:px-12">
           {showcaseImage && (
             <div className="absolute inset-0 opacity-20">

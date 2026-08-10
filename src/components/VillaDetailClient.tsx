@@ -276,6 +276,50 @@ export default function VillaDetailClient({
           </section>
           )}
 
+          {/* Price table */}
+          {prefs.sections.priceTable && villa.seasons.length > 0 && (
+          <section>
+            <h2 className="text-xl font-bold text-brand-950">
+              {t("detail.priceTable")}
+            </h2>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-sand-200">
+              <table className="w-full text-sm">
+                <thead className="bg-brand-800 text-white">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">
+                      {t("detail.season")}
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold">
+                      {t("detail.dates")}
+                    </th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      {t("detail.nightly")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {villa.seasons.map((s, i) => (
+                    <tr
+                      key={i}
+                      className={i % 2 ? "bg-sand-50" : "bg-white"}
+                    >
+                      <td className="px-4 py-3 font-semibold text-brand-900">
+                        {lang === "tr" ? s.labelTr : s.labelEn}
+                      </td>
+                      <td className="px-4 py-3 text-brand-900/70">
+                        {formatDate(s.start, lang)} — {formatDate(s.end, lang)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-brand-800">
+                        {formatPrice(s.price, lang)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          )}
+
           {/* Uzaklıklar */}
           {prefs.sections.distances && dists.length > 0 && (
           <section>
@@ -339,50 +383,6 @@ export default function VillaDetailClient({
                 />
               </div>
             </section>
-          )}
-
-          {/* Price table */}
-          {prefs.sections.priceTable && villa.seasons.length > 0 && (
-          <section>
-            <h2 className="text-xl font-bold text-brand-950">
-              {t("detail.priceTable")}
-            </h2>
-            <div className="mt-4 overflow-hidden rounded-2xl border border-sand-200">
-              <table className="w-full text-sm">
-                <thead className="bg-brand-800 text-white">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold">
-                      {t("detail.season")}
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold">
-                      {t("detail.dates")}
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      {t("detail.nightly")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {villa.seasons.map((s, i) => (
-                    <tr
-                      key={i}
-                      className={i % 2 ? "bg-sand-50" : "bg-white"}
-                    >
-                      <td className="px-4 py-3 font-semibold text-brand-900">
-                        {lang === "tr" ? s.labelTr : s.labelEn}
-                      </td>
-                      <td className="px-4 py-3 text-brand-900/70">
-                        {formatDate(s.start, lang)} — {formatDate(s.end, lang)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-brand-800">
-                        {formatPrice(s.price, lang)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
           )}
 
           {/* Location */}

@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createCategory,
   updateCategory,
   setCategoryVillas,
+  uploadCategoryImage,
+  removeCategoryImage,
 } from "@/lib/actions/admin/categories";
 import { categoryColorOptions, categoryIconOptions } from "@/lib/adminMeta";
 import { slugify } from "@/lib/slugify";
@@ -14,6 +16,8 @@ import SaveBar from "@/components/admin/ui/SaveBar";
 import { useToast } from "@/components/admin/ui/Toast";
 import { useUnsavedGuard } from "@/components/admin/ui/useUnsavedGuard";
 import { inputCls } from "@/components/admin/ui/styles";
+import ImageUploadField from "@/components/admin/ImageUploadField";
+import { imageUrl } from "@/lib/images/url";
 import type { AdminCategoryFull } from "@/lib/data/admin/categories";
 import type { VillaOption } from "@/lib/data/admin/villas";
 
@@ -61,6 +65,15 @@ export default function CategoryForm({
     [f, villaIds, saved]
   );
   useUnsavedGuard(dirty);
+
+  // ImageUploadField yükleyince router.refresh() çağırır → category prop değişir.
+  // f.image ve saved.f.image'ı senkronize et ki önizleme anında güncellensin
+  // ve Kaydet basılınca eski/boş değer gönderilmesin.
+  useEffect(() => {
+    const newImage = category?.image ?? "";
+    setF((p) => ({ ...p, image: newImage }));
+    setSaved((p) => ({ ...p, f: { ...p.f, image: newImage } }));
+  }, [category?.image]);
 
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => {
     setF((p) => ({ ...p, [k]: v }));
@@ -172,8 +185,40 @@ export default function CategoryForm({
               ))}
             </select>
           </Field>
-          <Field label="Görsel URL" error={errors.image} hint="Opsiyonel.">
-            <input className={inputCls} value={f.image} onChange={(e) => set("image", e.target.value)} placeholder="https://…" />
+          <Field label="Görsel" error={errors.image} hint="Opsiyonel — dosya yükleyin ya da URL girin." className="sm:col-span-2">
+            {/* Edit modunda dosya yükleme + önizleme; create modunda henüz ID yok, sadece URL. */}
+            {mode === "edit" && category ? (
+              <div className="space-y-3">
+                <ImageUploadField
+                  url={imageUrl(f.image)}
+                  alt={f.nameTr || "Kategori görseli"}
+                  aspect="aspect-[16/7]"
+                  onUpload={async (fd) => {
+                    fd.set("categoryId", category.id);
+                    return uploadCategoryImage(fd);
+                  }}
+                  onRemove={async () =>
+                    removeCategoryImage({ categoryId: category.id })
+                  }
+                />
+                <div>
+                  <p className="mb-1 text-xs text-brand-900/55">Ya da doğrudan URL girin:</p>
+                  <input
+                    className={inputCls}
+                    value={f.image}
+                    onChange={(e) => set("image", e.target.value)}
+                    placeholder="https://…"
+                  />
+                </div>
+              </div>
+            ) : (
+              <input
+                className={inputCls}
+                value={f.image}
+                onChange={(e) => set("image", e.target.value)}
+                placeholder="https://…"
+              />
+            )}
           </Field>
           <Field label="Açıklama (Türkçe)" error={errors.descTr} className="sm:col-span-2">
             <input className={inputCls} value={f.descTr} onChange={(e) => set("descTr", e.target.value)} />

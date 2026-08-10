@@ -11,6 +11,7 @@ import {
   type CategoryFormInput,
 } from "@/lib/schemas/adminCategory";
 import { toFieldErrors } from "@/lib/schemas/fieldErrors";
+import { storeImage, removeImage } from "@/lib/images/store";
 
 export type CategoryResult =
   | { ok: true; id?: string }
@@ -19,6 +20,10 @@ export type CategoryResult =
       error: "auth" | "validation" | "slug" | "generic";
       fields?: Record<string, string>;
     };
+
+export type CategoryImageResult =
+  | { ok: true }
+  | { ok: false; error: "auth" | "validation" | "toobig" | "type" | "generic" };
 
 function toRow(d: CategoryFormInput) {
   return {
@@ -192,5 +197,74 @@ export async function saveCategoryHomeSettings(
 
   revalidatePath("/yonetim/ayarlar");
   revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Kategori görselini yükler ve DB'deki `image` alanını günceller. FormData: categoryId, file. */
+export async function uploadCategoryImage(
+  formData: FormData
+): Promise<CategoryImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const categoryId = String(formData.get("categoryId") ?? "");
+  if (!categoryId) return { ok: false, error: "validation" };
+
+  const supabase = await supabaseSession();
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("slug, image")
+    .eq("id", categoryId)
+    .maybeSingle();
+  if (!cat) return { ok: false, error: "validation" };
+
+  const stored = await storeImage(
+    supabase,
+    formData.get("file"),
+    `kategoriler/${cat.slug}`
+  );
+  if (!stored.ok) return stored;
+
+  const { error } = await supabase
+    .from("categories")
+    .update({ image: stored.path })
+    .eq("id", categoryId);
+  if (error) {
+    await removeImage(supabase, stored.path);
+    return { ok: false, error: "generic" };
+  }
+
+  // Eski görseli Storage'dan temizle (URL değilse)
+  await removeImage(supabase, cat.image);
+  revalidate(categoryId);
+  return { ok: true };
+}
+
+/** Kategori görselini kaldırır (Storage + DB). */
+export async function removeCategoryImage(
+  input: unknown
+): Promise<CategoryImageResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const categoryId = String((input as Record<string, unknown>)?.categoryId ?? "");
+  if (!categoryId) return { ok: false, error: "validation" };
+
+  const supabase = await supabaseSession();
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("image")
+    .eq("id", categoryId)
+    .maybeSingle();
+  if (!cat) return { ok: false, error: "validation" };
+
+  const { error } = await supabase
+    .from("categories")
+    .update({ image: null })
+    .eq("id", categoryId);
+  if (error) return { ok: false, error: "generic" };
+
+  await removeImage(supabase, cat.image);
+  revalidate(categoryId);
   return { ok: true };
 }

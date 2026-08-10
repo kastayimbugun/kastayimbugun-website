@@ -6,8 +6,60 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { Category } from "@/lib/data/categories";
+import { CategoryIcon } from "@/lib/categoryIcons";
+import { isValidImageUrl } from "@/lib/imageUtils";
 
 const short = (s: string) => s.replace(/ Villaları$| Villalar$| Villas$/, "");
+
+function CategoryItem({
+  cat,
+  lang,
+  hasDraggedRef,
+}: {
+  cat: Category;
+  lang: string;
+  hasDraggedRef: React.RefObject<boolean>;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const label = short(lang === "tr" ? cat.titleTr : cat.titleEn);
+  const hasValidImage = isValidImageUrl(cat.image) && !imgError;
+
+  return (
+    <Link
+      key={cat.slug}
+      href={`/villalar?category=${cat.slug}`}
+      onClick={(e) => {
+        if (hasDraggedRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+      className="group w-[124px] shrink-0"
+    >
+      <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-sand-100 flex items-center justify-center">
+        {hasValidImage ? (
+          <Image
+            src={cat.image}
+            alt={label}
+            fill
+            sizes="124px"
+            className="object-cover transition duration-500 group-hover:scale-105"
+            priority={false}
+            draggable={false}
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-sand-200/70 text-brand-800 transition duration-300 group-hover:scale-105 group-hover:bg-sand-200">
+            <CategoryIcon name={cat.iconName} className="h-8 w-8 text-brand-700" />
+          </div>
+        )}
+      </div>
+      <div className="mt-2 text-[13px] font-semibold leading-tight text-brand-900 transition group-hover:text-brand-700">
+        {label}
+      </div>
+    </Link>
+  );
+}
 
 export default function CategoryBrowser({
   categories,
@@ -163,7 +215,7 @@ export default function CategoryBrowser({
   };
 
   return (
-    <section className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 group/section">
+    <section className="relative mx-auto max-w-7xl px-8 py-6 sm:px-10 group/section">
       {/* SOL OK BUTONU */}
       {canScrollLeft && (
         <button
@@ -192,44 +244,22 @@ export default function CategoryBrowser({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        className={`no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 select-none ${
+        className={`no-scrollbar -mx-8 flex gap-3 overflow-x-auto px-8 pb-2 sm:mx-0 sm:px-0 select-none ${
           isDraggingState ? "cursor-grabbing" : "cursor-grab"
         }`}
       >
-        {categories.map((cat) => {
-          const label = short(lang === "tr" ? cat.titleTr : cat.titleEn);
-          return (
-            <Link
-              key={cat.slug}
-              href={`/villalar?category=${cat.slug}`}
-              onClick={(e) => {
-                if (hasDraggedRef.current) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-              }}
-              className="group w-[124px] shrink-0"
-            >
-              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-sand-100">
-                <Image
-                  src={cat.image}
-                  alt={label}
-                  fill
-                  sizes="124px"
-                  className="object-cover transition duration-500 group-hover:scale-105"
-                  priority={false}
-                  draggable={false}
-                />
-              </div>
-              <div className="mt-2 text-[13px] font-semibold leading-tight text-brand-900 transition group-hover:text-brand-700">
-                {label}
-              </div>
-            </Link>
-          );
-        })}
+        {categories.map((cat) => (
+          <CategoryItem
+            key={cat.slug}
+            cat={cat}
+            lang={lang}
+            hasDraggedRef={hasDraggedRef}
+          />
+        ))}
       </div>
     </section>
   );
 }
+
 
 

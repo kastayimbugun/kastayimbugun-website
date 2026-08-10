@@ -85,7 +85,7 @@ export default function CategorySection({
 
   return (
     <section className={tinted ? "bg-sand-50 py-8" : "py-8"}>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="mx-auto max-w-7xl px-8 sm:px-10">
         <div className="flex items-end justify-between gap-4">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
@@ -147,7 +147,7 @@ export default function CategorySection({
                 e.stopPropagation();
               }
             }}
-            className={`no-scrollbar -mx-4 mt-6 flex gap-5 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 ${
+            className={`no-scrollbar -mx-8 mt-6 flex gap-5 overflow-x-auto px-8 pb-2 sm:mx-0 sm:px-0 ${
               dragging
                 ? "cursor-grabbing snap-none select-none"
                 : "cursor-grab snap-x snap-proximity"

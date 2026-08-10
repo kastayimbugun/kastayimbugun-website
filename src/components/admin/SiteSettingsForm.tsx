@@ -1,8 +1,10 @@
 "use client";
 
+import React from "react";
+
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Droplets, Image as ImageIcon } from "lucide-react";
 import ImageUploadField from "@/components/admin/ImageUploadField";
 import Tabs from "@/components/admin/Tabs";
 import {
@@ -175,6 +177,20 @@ export default function SiteSettingsForm({
   );
   const [footer, setFooter] = useState<FooterConfig>(() => settings.footerConfig);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Filigran (watermark) state
+  const [savedWatermark, setSavedWatermark] = useState({
+    enabled: settings.watermarkEnabled,
+    opacity: settings.watermarkOpacity,
+    scale: settings.watermarkScale,
+    position: settings.watermarkPosition,
+  });
+  const [watermark, setWatermark] = useState({
+    enabled: settings.watermarkEnabled,
+    opacity: settings.watermarkOpacity,
+    scale: settings.watermarkScale,
+    position: settings.watermarkPosition,
+  });
   // Sürükle-bırak sıralama — id sürüklenen, overId üzerine gelinen satır.
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -202,8 +218,9 @@ export default function SiteSettingsForm({
     const adDirty = JSON.stringify(ad) !== JSON.stringify(savedAd);
     const headerDirty = JSON.stringify(header) !== JSON.stringify(savedHeader);
     const footerDirty = JSON.stringify(footer) !== JSON.stringify(savedFooter);
+    const watermarkDirty = JSON.stringify(watermark) !== JSON.stringify(savedWatermark);
     return (
-      textDirty || catDirty || prefsDirty || adDirty || headerDirty || footerDirty
+      textDirty || catDirty || prefsDirty || adDirty || headerDirty || footerDirty || watermarkDirty
     );
   }, [
     f,
@@ -218,6 +235,8 @@ export default function SiteSettingsForm({
     savedHeader,
     footer,
     savedFooter,
+    watermark,
+    savedWatermark,
   ]);
 
   useUnsavedGuard(dirty);
@@ -269,6 +288,10 @@ export default function SiteSettingsForm({
           adShowMobile: ad.mobile,
           headerConfig: header,
           footerConfig: footer,
+          watermarkEnabled: watermark.enabled,
+          watermarkOpacity: watermark.opacity,
+          watermarkScale: watermark.scale,
+          watermarkPosition: watermark.position,
         }),
         saveCategoryHomeSettings(
           catList.map((c) => ({
@@ -287,6 +310,7 @@ export default function SiteSettingsForm({
         setSavedAd(ad);
         setSavedHeader(header);
         setSavedFooter(footer);
+        setSavedWatermark(watermark);
         toast.success("Ayarlar kaydedildi.");
         router.refresh();
         return;
@@ -815,6 +839,177 @@ export default function SiteSettingsForm({
     </div>
   );
 
+  /* ─── Filigran (Watermark) Tab ──────────────────────────────────────────── */
+  const POSITION_LABELS: Record<string, string> = {
+    center: "Ortada",
+    "bottom-right": "Sağ alt",
+    "bottom-left": "Sol alt",
+    "top-right": "Sağ üst",
+    "top-left": "Sol üst",
+  };
+
+  // Önizleme: logo SVG'sini pozisyon ve opaklığa göre yerleştirir
+  const previewPositionStyle = (): React.CSSProperties => {
+    const base: React.CSSProperties = { position: "absolute", pointerEvents: "none" };
+    const pct = Math.round(watermark.scale * 100);
+    const logoStyle: React.CSSProperties = { width: `${pct}%`, opacity: watermark.opacity };
+    switch (watermark.position) {
+      case "bottom-right": return { ...base, bottom: "6%", right: "4%", ...logoStyle };
+      case "bottom-left":  return { ...base, bottom: "6%", left: "4%",  ...logoStyle };
+      case "top-right":    return { ...base, top: "6%",    right: "4%", ...logoStyle };
+      case "top-left":     return { ...base, top: "6%",    left: "4%",  ...logoStyle };
+      default:             return { ...base, top: "50%", left: "50%", transform: "translate(-50%,-50%)", ...logoStyle };
+    }
+  };
+
+  const watermarkTab = (
+    <div className="space-y-6">
+      <Section title="Filigran Ayarları">
+        <p className="mb-4 text-sm text-brand-900/70">
+          Siteden sunucuya aktarılan tüm villa fotoğraflarına logonuz otomatik olarak
+          şeffaf biçimde eklenir. Bu ayarlar yeni yüklemeler için geçerlidir;
+          mevcut görselleri güncellemek için toplu aktarımı yeniden çalıştırın.
+        </p>
+
+        {/* Etkinleştir/devre dışı */}
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={watermark.enabled}
+            onClick={() => setWatermark((w) => ({ ...w, enabled: !w.enabled }))}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              watermark.enabled ? "bg-brand-600" : "bg-sand-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                watermark.enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+          <span className="text-sm font-medium text-brand-900">
+            {watermark.enabled ? "Filigran aktif" : "Filigran kapalı"}
+          </span>
+        </div>
+
+        <div className={`space-y-5 transition-opacity ${watermark.enabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+          {/* Şeffaflık */}
+          <div>
+            <label className="block text-sm font-medium text-brand-900 mb-2">
+              Şeffaflık
+              <span className="ml-2 text-xs text-brand-900/50 font-normal">
+                {Math.round(watermark.opacity * 100)}%
+              </span>
+            </label>
+            <div className="flex items-center gap-3">
+              <Droplets className="h-4 w-4 text-brand-400 shrink-0" />
+              <input
+                type="range"
+                min={5} max={80} step={5}
+                value={Math.round(watermark.opacity * 100)}
+                onChange={(e) => setWatermark((w) => ({ ...w, opacity: Number(e.target.value) / 100 }))}
+                className="w-full h-2 appearance-none rounded-full bg-sand-200 accent-brand-600 cursor-pointer"
+              />
+              <span className="w-10 text-right text-sm text-brand-900/60">{Math.round(watermark.opacity * 100)}%</span>
+            </div>
+            <div className="flex justify-between text-xs text-brand-900/40 mt-1">
+              <span>Çok şeffaf</span><span>Belirgin</span>
+            </div>
+          </div>
+
+          {/* Boyut */}
+          <div>
+            <label className="block text-sm font-medium text-brand-900 mb-2">
+              Logo boyutu
+              <span className="ml-2 text-xs text-brand-900/50 font-normal">
+                Fotoğraf genişliğinin %{Math.round(watermark.scale * 100)}&apos;i
+              </span>
+            </label>
+            <div className="flex items-center gap-3">
+              <ImageIcon className="h-4 w-4 text-brand-400 shrink-0" />
+              <input
+                type="range"
+                min={15} max={80} step={5}
+                value={Math.round(watermark.scale * 100)}
+                onChange={(e) => setWatermark((w) => ({ ...w, scale: Number(e.target.value) / 100 }))}
+                className="w-full h-2 appearance-none rounded-full bg-sand-200 accent-brand-600 cursor-pointer"
+              />
+              <span className="w-10 text-right text-sm text-brand-900/60">%{Math.round(watermark.scale * 100)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-brand-900/40 mt-1">
+              <span>Küçük</span><span>Büyük</span>
+            </div>
+          </div>
+
+          {/* Konum */}
+          <div>
+            <label className="block text-sm font-medium text-brand-900 mb-2">Konum</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["top-left","top-right","center","bottom-left","bottom-right"] as const).map((pos) => {
+                // Grid sıralaması: TL, TR, center (orta satır), BL, BR
+                const order = {"top-left":1,"top-right":2,"center":3,"bottom-left":4,"bottom-right":5}[pos];
+                return (
+                  <button
+                    key={pos}
+                    type="button"
+                    style={{ order }}
+                    onClick={() => setWatermark((w) => ({ ...w, position: pos }))}
+                    className={`rounded-lg border-2 py-2 px-3 text-xs font-medium transition-all ${
+                      watermark.position === pos
+                        ? "border-brand-600 bg-brand-50 text-brand-700"
+                        : "border-sand-200 bg-white text-brand-900/60 hover:border-brand-300"
+                    } ${
+                      pos === "center" ? "col-start-2" : ""
+                    }`}
+                  >
+                    {POSITION_LABELS[pos]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* Canlı Önizleme */}
+      <Section title="Canlı Önizleme">
+        <p className="mb-3 text-sm text-brand-900/70">
+          Logonuzun fotoğraf üzerinde nasıl görüneceğini gerçek zamanlı olarak görün.
+        </p>
+        <div
+          className="relative w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-700 via-slate-600 to-slate-800"
+          style={{ aspectRatio: "16/9" }}
+        >
+          {/* Örnek villa fotoğrafı arka plan */}
+          <div className="absolute inset-0 bg-[url('/images/preview-bg.jpg')] bg-cover bg-center opacity-70" />
+          {/* Degrade overlay (gerçek fotoğraf gibi görünsün) */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
+          {/* Filigran — önizleme */}
+          {watermark.enabled && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src="/logo.svg"
+              alt="Logo önizleme"
+              style={previewPositionStyle()}
+              className="select-none"
+            />
+          )}
+          {/* Bilgi etiketi */}
+          <div className="absolute bottom-2 left-2 text-[10px] text-white/60 bg-black/30 px-2 py-0.5 rounded">
+            Önizleme — gerçek fotoğraf benzer görünür
+          </div>
+        </div>
+
+        {!watermark.enabled && (
+          <p className="mt-2 text-sm text-amber-600 font-medium">
+            ⚠️ Filigran kapalı — fotoğraflar logosuz yüklenecek.
+          </p>
+        )}
+      </Section>
+    </div>
+  );
+
   return (
     <form
       onSubmit={(e) => {
@@ -832,6 +1027,7 @@ export default function SiteSettingsForm({
           { id: "seo", label: "SEO", content: seoTab },
           { id: "contact", label: "İletişim", content: contactTab },
           { id: "documents", label: "Belgeler", content: documentsTab },
+          { id: "watermark", label: "🖼 Filigran", content: watermarkTab },
         ]}
       />
 
