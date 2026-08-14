@@ -30,6 +30,7 @@ import { useUnsavedGuard } from "@/components/admin/ui/useUnsavedGuard";
 import { inputCls } from "@/components/admin/ui/styles";
 import type { AdminSiteSettings } from "@/lib/data/admin/site";
 import type { AdminCategoryListItem } from "@/lib/data/admin/categories";
+import type { Region } from "@/lib/data/villas";
 import type {
   VillaDetailPrefs,
   SimilarMode,
@@ -140,9 +141,11 @@ const textareaCls = `${inputCls} min-h-24 resize-y`;
 export default function SiteSettingsForm({
   settings,
   categories = [],
+  regions = [],
 }: {
   settings: AdminSiteSettings;
   categories?: AdminCategoryListItem[];
+  regions?: Region[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -193,6 +196,20 @@ export default function SiteSettingsForm({
     scale: settings.watermarkScale,
     position: settings.watermarkPosition,
   });
+  // Ana sayfa bölge seçimi — seçili slug kümesi. settings.homeRegions null ise
+  // (henüz seçim yapılmamış) tüm bölgeler seçili sayılır.
+  const allRegionSlugs = useMemo(() => regions.map((r) => r.slug), [regions]);
+  const initialRegionSel = useMemo(
+    () =>
+      settings.homeRegions == null
+        ? new Set(allRegionSlugs)
+        : new Set(settings.homeRegions.filter((s) => allRegionSlugs.includes(s))),
+    [settings.homeRegions, allRegionSlugs]
+  );
+  const [savedRegionSel, setSavedRegionSel] =
+    useState<Set<string>>(initialRegionSel);
+  const [regionSel, setRegionSel] = useState<Set<string>>(initialRegionSel);
+
   // Sürükle-bırak sıralama — id sürüklenen, overId üzerine gelinen satır.
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -221,8 +238,10 @@ export default function SiteSettingsForm({
     const headerDirty = JSON.stringify(header) !== JSON.stringify(savedHeader);
     const footerDirty = JSON.stringify(footer) !== JSON.stringify(savedFooter);
     const watermarkDirty = JSON.stringify(watermark) !== JSON.stringify(savedWatermark);
+    const serializeSel = (s: Set<string>) => [...s].sort().join(",");
+    const regionDirty = serializeSel(regionSel) !== serializeSel(savedRegionSel);
     return (
-      textDirty || catDirty || prefsDirty || adDirty || headerDirty || footerDirty || watermarkDirty
+      textDirty || catDirty || prefsDirty || adDirty || headerDirty || footerDirty || watermarkDirty || regionDirty
     );
   }, [
     f,
@@ -239,6 +258,8 @@ export default function SiteSettingsForm({
     savedFooter,
     watermark,
     savedWatermark,
+    regionSel,
+    savedRegionSel,
   ]);
 
   useUnsavedGuard(dirty);
@@ -279,8 +300,24 @@ export default function SiteSettingsForm({
   const setSimilar = (patch: Partial<VillaDetailPrefs["similar"]>) =>
     setPrefs((p) => ({ ...p, similar: { ...p.similar, ...patch } }));
 
+  const toggleRegion = (slug: string, checked: boolean) =>
+    setRegionSel((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(slug);
+      else next.delete(slug);
+      return next;
+    });
+  const selectAllRegions = () => setRegionSel(new Set(allRegionSlugs));
+  const clearAllRegions = () => setRegionSel(new Set());
+
   const submit = () => {
     setErrors({});
+    // Tümü seçiliyse null gönder (= hepsi; ileride eklenen bölgeler de görünsün).
+    // Aksi halde yalnızca seçili slug'lar (mevcut bölge sırası korunarak).
+    const homeRegionsPayload =
+      regionSel.size === allRegionSlugs.length
+        ? null
+        : allRegionSlugs.filter((s) => regionSel.has(s));
     start(async () => {
       const [resSite, resCat] = await Promise.all([
         saveSiteSettings({
@@ -294,6 +331,7 @@ export default function SiteSettingsForm({
           watermarkOpacity: watermark.opacity,
           watermarkScale: watermark.scale,
           watermarkPosition: watermark.position,
+          homeRegions: homeRegionsPayload,
         }),
         saveCategoryHomeSettings(
           catList.map((c) => ({
@@ -313,6 +351,7 @@ export default function SiteSettingsForm({
         setSavedHeader(header);
         setSavedFooter(footer);
         setSavedWatermark(watermark);
+        setSavedRegionSel(new Set(regionSel));
         toast.success("Ayarlar kaydedildi.");
         router.refresh();
         return;
@@ -553,6 +592,75 @@ export default function SiteSettingsForm({
               })}
             </div>
           </div>
+        )}
+      </Section>
+
+      <Section title="Ana Sayfa Bölgeleri">
+        <p className="mb-3 text-sm text-brand-900/70">
+          Ana sayfadaki <strong>&quot;Popüler Bölgeler&quot;</strong> bölümünde
+          hangi bölgelerin görüneceğini seçin. İşaretlenmeyen bölgeler ana sayfada
+          gösterilmez (sitedeki arama ve bölge sayfaları etkilenmez). Sıra, Bölgeler
+          sayfasındaki sıralamayı izler.
+        </p>
+
+        {regions.length === 0 ? (
+          <p className="text-sm text-brand-900/70">Henüz bölge bulunmuyor.</p>
+        ) : (
+          <>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={selectAllRegions}
+                className="rounded-lg border border-sand-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-800 hover:bg-sand-50"
+              >
+                Tümünü seç
+              </button>
+              <button
+                type="button"
+                onClick={clearAllRegions}
+                className="rounded-lg border border-sand-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-800 hover:bg-sand-50"
+              >
+                Temizle
+              </button>
+              <span className="text-xs text-brand-900/55">
+                {regionSel.size} / {regions.length} bölge seçili
+              </span>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-sand-200 bg-white">
+              <div className="divide-y divide-sand-200">
+                {regions.map((r) => (
+                  <label
+                    key={r.slug}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-sand-50"
+                    style={{ paddingLeft: `${16 + (r.depth ?? 0) * 20}px` }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={regionSel.has(r.slug)}
+                      onChange={(e) => toggleRegion(r.slug, e.target.checked)}
+                      className="h-4 w-4 rounded border-sand-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="min-w-0 truncate font-medium text-brand-950">
+                      {r.name}
+                    </span>
+                    {r.province && (
+                      <span className="shrink-0 text-xs text-brand-900/50">
+                        {r.province}
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {regionSel.size === 0 && (
+              <p className="mt-2 text-sm text-amber-600 font-medium">
+                ⚠️ Hiçbir bölge seçili değil — &quot;Popüler Bölgeler&quot; bölümü
+                ana sayfada gizlenecek.
+              </p>
+            )}
+          </>
         )}
       </Section>
 

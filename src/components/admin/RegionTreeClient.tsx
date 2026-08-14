@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -9,7 +9,7 @@ import {
   MapPin,
   GripVertical,
   CornerDownRight,
-  Map,
+  Map as MapIcon,
   ArrowRight,
   ArrowLeft,
   ChevronDown,
@@ -64,8 +64,76 @@ export default function RegionTreeClient({
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [dropMode, setDropMode] = useState<"before" | "inside" | "after">("after");
+  // Kapatılan (alt ağacı gizlenen) konumların id'leri.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const dirty = JSON.stringify(items) !== JSON.stringify(savedItems);
+
+  // --- YARDIMCILAR ---
+  // Bir konumun doğrudan alt sayısı (yalnızca bir seviye alt).
+  const directChildCount = (id: string) =>
+    items.reduce((n, i) => (i.parentId === id ? n + 1 : n), 0);
+
+  // Sürüklenen bloğun (konum + tüm alt ağacı) bittiği son indeks.
+  const blockEndIndex = (start: number) => {
+    const d = items[start].depth;
+    let end = start;
+    for (let i = start + 1; i < items.length; i++) {
+      if (items[i].depth > d) end = i;
+      else break;
+    }
+    return end;
+  };
+
+  // Bir konum, üst zincirindeki herhangi biri kapalıysa gizlidir.
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const isHidden = (item: FlatRegionItem) => {
+    let p = item.parentId;
+    while (p) {
+      if (collapsed.has(p)) return true;
+      p = byId.get(p)?.parentId ?? null;
+    }
+    return false;
+  };
+
+  const toggleCollapse = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Sürüklenen bloğun görsel aralığı (soluklaştırma için).
+  const draggedBlockEnd = draggedIdx !== null ? blockEndIndex(draggedIdx) : -1;
+
+  // --- OTOMATİK KAYDIRMA (sürükleme sırasında kenarlarda) ---
+  const pointerYRef = useRef(0);
+  useEffect(() => {
+    if (draggedIdx === null) return;
+    const onOver = (e: DragEvent) => {
+      pointerYRef.current = e.clientY;
+    };
+    window.addEventListener("dragover", onOver);
+    let raf = 0;
+    const tick = () => {
+      const y = pointerYRef.current;
+      const h = window.innerHeight;
+      const edge = 110; // kenardan bu kadar piksel içeride kaydırma başlar
+      const maxSpeed = 22;
+      if (y > 0 && y < edge) {
+        window.scrollBy(0, -Math.ceil((maxSpeed * (edge - y)) / edge));
+      } else if (y > h - edge) {
+        window.scrollBy(0, Math.ceil((maxSpeed * (y - (h - edge))) / edge));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      window.removeEventListener("dragover", onOver);
+      cancelAnimationFrame(raf);
+    };
+  }, [draggedIdx]);
 
   // --- SÜRÜKLE - BIRAK MANTIĞI ---
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -78,6 +146,12 @@ export default function RegionTreeClient({
     e.preventDefault();
     e.stopPropagation();
     if (draggedIdx === null || draggedIdx === targetIndex) return;
+
+    // Bir konumu kendi alt ağacının içine bırakmak yapıyı bozar — engelle.
+    if (targetIndex > draggedIdx && targetIndex <= draggedBlockEnd) {
+      setDragOverIdx(null);
+      return;
+    }
 
     setDragOverIdx(targetIndex);
 
@@ -100,6 +174,13 @@ export default function RegionTreeClient({
     e.preventDefault();
     e.stopPropagation();
     if (draggedIdx === null || draggedIdx === targetIndex) return;
+
+    // Kendi alt ağacının içine bırakmayı yok say.
+    if (targetIndex > draggedIdx && targetIndex <= draggedBlockEnd) {
+      setDraggedIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
 
     const nextItems = [...items];
     const draggedItem = nextItems[draggedIdx];
@@ -159,6 +240,15 @@ export default function RegionTreeClient({
     }
 
     nextItems.splice(insertIdx, 0, ...draggedBlock);
+
+    // İçine bırakıldıysa hedefi otomatik aç ki sonuç görünür olsun.
+    if (dropMode === "inside" && collapsed.has(targetItem.id)) {
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        next.delete(targetItem.id);
+        return next;
+      });
+    }
 
     setItems(nextItems);
     setDraggedIdx(null);
@@ -231,17 +321,46 @@ export default function RegionTreeClient({
       className="space-y-4"
     >
       <div className="rounded-2xl border border-sand-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between text-xs text-brand-900/60">
-          <span>
-            Sürükleyerek sırasını veya üst konumunu değiştirin. Sağ/sol ok butonlarıyla hızlıca alt bölge yapabilir veya üst seviyeye çıkarabilirsiniz.
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-brand-900/60">
+          <span className="min-w-0 flex-1">
+            Sürükleyerek sırasını veya üst konumunu değiştirin. Sağ/sol ok butonlarıyla hızlıca alt bölge yapabilir veya üst seviyeye çıkarabilirsiniz. Kaydırırken üst/alt kenara götürünce liste otomatik kayar.
           </span>
-          <span className="font-semibold text-brand-950">
-            Toplam {items.length} konum
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setCollapsed(
+                  new Set(
+                    items.filter((i) => directChildCount(i.id) > 0).map((i) => i.id)
+                  )
+                )
+              }
+              className="rounded-lg border border-sand-200 bg-white px-2.5 py-1 font-medium text-brand-800 hover:bg-sand-50"
+            >
+              Tümünü kapat
+            </button>
+            <button
+              type="button"
+              onClick={() => setCollapsed(new Set())}
+              className="rounded-lg border border-sand-200 bg-white px-2.5 py-1 font-medium text-brand-800 hover:bg-sand-50"
+            >
+              Tümünü aç
+            </button>
+            <span className="font-semibold text-brand-950">
+              Toplam {items.length} konum
+            </span>
+          </div>
         </div>
 
         <div className="space-y-2">
           {items.map((item, index) => {
+            // Üst konumu kapalıysa bu satır gizli — indeksi korumak için null döner.
+            if (isHidden(item)) return null;
+
+            const childCount = directChildCount(item.id);
+            const hasChildren = childCount > 0;
+            const isCollapsed = collapsed.has(item.id);
+
             // Recursive toplam villa sayısı hesapla
             const getTotalVillaCount = (id: string): number => {
               let total = 0;
@@ -254,8 +373,12 @@ export default function RegionTreeClient({
             };
             const totalVillaCount = item.villaCount + getTotalVillaCount(item.id);
 
-            const isDragging = draggedIdx === index;
             const isDragOver = dragOverIdx === index;
+            // Sürüklenen konum + tüm alt ağacı birlikte soluklaşsın.
+            const inDraggedBlock =
+              draggedIdx !== null &&
+              index >= draggedIdx &&
+              index <= draggedBlockEnd;
 
             // Seviyeye göre ikon ve stil
             const levelLabel =
@@ -276,7 +399,7 @@ export default function RegionTreeClient({
                 : "bg-purple-100 text-purple-900 border-purple-200";
 
             const Icon =
-              item.depth === 0 ? Building2 : item.depth === 1 ? Map : MapPin;
+              item.depth === 0 ? Building2 : item.depth === 1 ? MapIcon : MapPin;
 
             // Derinliğe göre girinti (indentation)
             const indentMargin =
@@ -305,7 +428,7 @@ export default function RegionTreeClient({
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
                 className={`group flex items-center justify-between gap-3 rounded-xl border p-3 transition ${indentMargin} ${
-                  isDragging
+                  inDraggedBlock
                     ? "border-dashed border-brand-400 bg-brand-50 opacity-40"
                     : dragOverStyle
                 }`}
@@ -318,6 +441,29 @@ export default function RegionTreeClient({
                   >
                     <GripVertical className="h-5 w-5" />
                   </div>
+
+                  {/* Aç/Kapa — alt konumu olanlarda; kapalıyken alt ağaç gizlenir */}
+                  {hasChildren ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapse(item.id)}
+                      aria-expanded={!isCollapsed}
+                      title={
+                        isCollapsed
+                          ? `${childCount} bağlı konumu göster`
+                          : `${childCount} bağlı konumu gizle`
+                      }
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-brand-700 hover:bg-sand-100"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          isCollapsed ? "-rotate-90" : ""
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <span className="w-6 shrink-0" aria-hidden />
+                  )}
 
                   {/* Ağaç Çizgisi Göstergesi */}
                   {item.depth > 0 && (
@@ -361,6 +507,11 @@ export default function RegionTreeClient({
                     </div>
                     <div className="text-[11px] text-brand-900/60">
                       {totalVillaCount} villa{totalVillaCount !== item.villaCount && ` (doğrudan ${item.villaCount})`} · Sıra #{index}
+                      {isCollapsed && (
+                        <span className="ml-1 font-semibold text-brand-700">
+                          · {childCount} bağlı konum gizli
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

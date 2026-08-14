@@ -53,6 +53,13 @@ export default function HomeClient({
   const inRegion = (name: string) => villas.filter((v) => v.region === name);
   const regionCount = (name: string) => inRegion(name).length;
 
+  // Panelden "Popüler Bölgeler" için seçim yapıldıysa yalnızca onları göster.
+  // null → tümü (varsayılan); dizi → yalnızca slug'ı listede olanlar (mevcut sıra korunur).
+  const displayRegions =
+    site.homeRegions == null
+      ? regions
+      : regions.filter((r) => site.homeRegions!.includes(r.slug));
+
   /** Panelden yüklenen bölge görseli yoksa o bölgedeki bir villanın fotoğrafı. */
   const regionImage = (r: Region) =>
     r.heroImage ?? inRegion(r.name).find((v) => v.images[0])?.images[0] ?? null;
@@ -140,7 +147,8 @@ export default function HomeClient({
       ))}
 
       {/* REGIONS */}
-      <section id="regions" className="bg-sand-50 py-14">
+      {displayRegions.length > 0 && (
+        <section id="regions" className="bg-sand-50 py-14">
         <div className="mx-auto max-w-7xl px-8 sm:px-10">
           <div className="text-center">
             <h2 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">
@@ -150,7 +158,7 @@ export default function HomeClient({
           </div>
 
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {regions.map((r, i) => {
+            {displayRegions.map((r, i) => {
               const href = r.parentSlug
                 ? `/villalar/${r.parentSlug}/${r.slug}`
                 : `/villalar/${r.slug}`;
@@ -210,6 +218,7 @@ export default function HomeClient({
           </div>
         </div>
       </section>
+      )}
 
       {/* WHY US */}
       <section id="about" className="mx-auto max-w-7xl px-8 py-16 sm:px-10">

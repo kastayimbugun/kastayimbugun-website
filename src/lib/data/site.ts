@@ -55,6 +55,15 @@ export interface SiteSettings {
   adLinkUrl: string | null;
   headerConfig: HeaderConfig;
   footerConfig: FooterConfig;
+  /** Ana sayfadaki "Popüler Bölgeler" için gösterilecek bölge slug'ları.
+   *  null → hepsi gösterilir; [] → hiçbiri; dizi → yalnızca listelenenler. */
+  homeRegions: string[] | null;
+}
+
+/** jsonb değerini slug dizisine çevirir. null → "hepsi", [] → "hiçbiri". */
+export function parseHomeRegions(value: unknown): string[] | null {
+  if (value == null || !Array.isArray(value)) return null;
+  return value.filter((s): s is string => typeof s === "string" && s.length > 0);
 }
 
 const EMPTY: SiteSettings = {
@@ -88,6 +97,7 @@ const EMPTY: SiteSettings = {
   adLinkUrl: null,
   headerConfig: DEFAULT_HEADER_CONFIG,
   footerConfig: DEFAULT_FOOTER_CONFIG,
+  homeRegions: null,
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -97,18 +107,18 @@ export async function getSiteSettings(): Promise<SiteSettings> {
        hero_title_tr, hero_title_en, hero_subtitle_tr, hero_subtitle_en,
        seo_title_tr, seo_title_en, seo_description_tr, seo_description_en`;
 
-  const extended = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config`;
+  const extended = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config, home_regions`;
 
   let q = await supabaseServer()
     .from("site_settings")
     .select(extended)
     .maybeSingle();
 
-  // Yeni kolonlar (0013/0014/0015/0016) yoksa diğer tüm ayarları kaybetmemek için
-  // minimal şemayla tekrar dene.
+  // Yeni kolonlar (0013/0014/0015/0016/0017) yoksa diğer tüm ayarları kaybetmemek
+  // için minimal şemayla tekrar dene.
   if (
     q.error &&
-    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config|favicon_image/.test(
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config|favicon_image|home_regions/.test(
       q.error.message ?? ""
     )
   ) {
@@ -151,5 +161,6 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     adLinkUrl: (r.ad_link_url as string | null) || null,
     headerConfig: resolveHeaderConfig(r.header_config),
     footerConfig: resolveFooterConfig(r.footer_config),
+    homeRegions: parseHomeRegions((r as Record<string, unknown>).home_regions),
   };
 }

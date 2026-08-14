@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Heart,
   MapPin,
@@ -34,8 +34,81 @@ export default function VillaCard({ villa }: { villa: Villa }) {
   const go = (e: React.MouseEvent, dir: 1 | -1) => {
     e.preventDefault();
     e.stopPropagation();
-    setIdx((i) => (i + dir + gallery.length) % gallery.length);
+    setIdx((i) => Math.min(gallery.length - 1, Math.max(0, i + dir)));
   };
+
+  // Mobil dokunmatik kaydırma: görseller yatay bir şeritte; parmakla sürüklenir,
+  // bırakınca eşiği aşan yön bir sonraki/önceki fotoğrafa geçer. Dikey hareket
+  // sayfayı normal kaydırır (yön belirlenene kadar müdahale edilmez).
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const [dragPx, setDragPx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  // Handler'lar yeniden abone olmasın diye anlık değerler ref'te tutulur.
+  const idxRef = useRef(idx);
+  useEffect(() => {
+    idxRef.current = idx;
+  }, [idx]);
+  const dragPxRef = useRef(0);
+  const swipedRef = useRef(false);
+
+  useEffect(() => {
+    const el = galleryRef.current;
+    if (!el || gallery.length <= 1) return;
+
+    let startX = 0;
+    let startY = 0;
+    let dir: "h" | "v" | null = null;
+
+    const onStart = (e: TouchEvent) => {
+      const tch = e.touches[0];
+      startX = tch.clientX;
+      startY = tch.clientY;
+      dir = null;
+      setDragging(true);
+    };
+    const onMove = (e: TouchEvent) => {
+      const tch = e.touches[0];
+      const dx = tch.clientX - startX;
+      const dy = tch.clientY - startY;
+      if (dir === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      }
+      if (dir !== "h") return;
+      e.preventDefault(); // yatay sürüklemede sayfanın kaymasını engelle
+      const i = idxRef.current;
+      const atEdge = (i === 0 && dx > 0) || (i === gallery.length - 1 && dx < 0);
+      const d = atEdge ? dx * 0.35 : dx; // kenarlarda direnç
+      dragPxRef.current = d;
+      setDragPx(d);
+    };
+    const onEnd = () => {
+      const width = el.clientWidth || 1;
+      const d = dragPxRef.current;
+      swipedRef.current = dir === "h" && Math.abs(d) > 6;
+      if (dir === "h") {
+        const threshold = Math.min(width * 0.18, 80);
+        const i = idxRef.current;
+        if (d <= -threshold && i < gallery.length - 1) setIdx(i + 1);
+        else if (d >= threshold && i > 0) setIdx(i - 1);
+      }
+      dragPxRef.current = 0;
+      setDragPx(0);
+      setDragging(false);
+      dir = null;
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, [gallery.length]);
 
   const code = villa.code ?? villaCode(villa.slug);
   const { min, max } = priceRange(villa);
@@ -55,21 +128,42 @@ export default function VillaCard({ villa }: { villa: Villa }) {
           : "border-sand-200 hover:border-brand-300"
       }`}
     >
-      {/* Görsel — mini galeri */}
-      <div className="relative aspect-[16/10] overflow-hidden">
-        {gallery.map((src, i) => (
-          <Image
-            key={src}
-            src={src}
-            alt={`${villa.name} — ${i + 1}`}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            priority={i === 0}
-            className={`object-cover transition-opacity duration-300 ${
-              i === idx ? "opacity-100" : "opacity-0"
-            }`}
-          />
-        ))}
+      {/* Görsel — mini galeri (mobilde parmakla kaydırılır) */}
+      <div
+        ref={galleryRef}
+        className="relative aspect-[16/10] overflow-hidden"
+        style={{ touchAction: "pan-y" }}
+        onClickCapture={(e) => {
+          // Yatay kaydırmadan sonra villaya girmeyi engelle.
+          if (swipedRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            swipedRef.current = false;
+          }
+        }}
+      >
+        {/* Yatay şerit — her fotoğraf yan yana; idx + sürükleme kadar kaydırılır */}
+        <div
+          className="flex h-full w-full"
+          style={{
+            transform: `translate3d(calc(${-idx * 100}% + ${dragPx}px), 0, 0)`,
+            transition: dragging ? "none" : "transform 300ms ease",
+          }}
+        >
+          {gallery.map((src, i) => (
+            <div key={src} className="relative h-full w-full shrink-0">
+              <Image
+                src={src}
+                alt={`${villa.name} — ${i + 1}`}
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                priority={i === 0}
+                draggable={false}
+                className="select-none object-cover"
+              />
+            </div>
+          ))}
+        </div>
 
         {gallery.length > 1 && (
           <>

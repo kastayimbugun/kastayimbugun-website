@@ -107,6 +107,10 @@ export const siteSettingsSchema = z.object({
   headerConfig: z.unknown().optional(),
   footerConfig: z.unknown().optional(),
 
+  // Ana sayfada gösterilecek bölge slug'ları. null → tüm bölgeler; dizi →
+  // yalnızca listelenenler. Boş dizi geçerli (hiçbiri) — o yüzden .nullable().
+  homeRegions: z.array(z.string()).nullable().optional(),
+
   // Filigran (watermark) ayarları — fotoğraflar sunucuya yüklenirken logo otomatik eklenir.
   watermarkEnabled: z.boolean().default(true),
   watermarkOpacity: z.number().min(0).max(1).default(0.35),
