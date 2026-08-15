@@ -15,6 +15,7 @@ import { formatDuration, responseMinutes } from "@/lib/bookingWaiting";
 import BookingDetailForm from "@/components/admin/BookingDetailForm";
 import BookingNotes from "@/components/admin/BookingNotes";
 import BookingStatusSelect from "@/components/admin/BookingStatusSelect";
+import DeleteBookingButton from "@/components/admin/DeleteBookingButton";
 import { BackLink } from "@/components/admin/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +110,13 @@ export default async function TalepDetayPage({
             Villa sayfası
           </a>
         )}
+        <DeleteBookingButton
+          bookingId={booking.id}
+          guestName={booking.fullName}
+          villaName={booking.villaName}
+          isConfirmed={booking.status === "confirmed"}
+          redirectTo={booking.status === "confirmed" ? "/yonetim/rezervasyonlar" : "/yonetim/talepler"}
+        />
       </div>
 
       <div className="mt-5">

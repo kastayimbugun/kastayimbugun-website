@@ -8,7 +8,7 @@ import type { Villa, AmenityKey, PoolType } from "@/lib/types";
  * Dönen nesneler arayüzün beklediği Villa şeklindedir, bileşenler değişmez.
  */
 
-const VILLA_FIELDS = `
+const VILLA_FIELDS_BASE = `
   slug, name, code, capacity, bedrooms, bathrooms, pool, size_m2, distance_to_sea,
   distance_airport_km, distance_market_km, distance_restaurant_km,
   distance_transit_km, distance_center_km,
@@ -23,6 +23,17 @@ const VILLA_FIELDS = `
   villa_blocks ( starts_on, ends_on )
 `;
 
+// 0019 kolonları (havuz ölçüleri + hasar depozitosu). Migration henüz
+// uygulanmadıysa bu alanlar olmadan sorgu tekrar denenir (bkz. selectVillas).
+const VILLA_EXTRA_FIELDS = `pool_width, pool_length, pool_depth, damage_deposit, ministry_cert_no`;
+const VILLA_FIELDS = `${VILLA_FIELDS_BASE}, ${VILLA_EXTRA_FIELDS}`;
+
+/** 0019 kolonları eksikse (migration uygulanmamış) sadece bu sütunlar hataya yol açar. */
+const isMissingExtraColumns = (message: string | undefined) =>
+  /pool_width|pool_length|pool_depth|damage_deposit|ministry_cert_no/.test(
+    message ?? ""
+  );
+
 interface VillaRow {
   slug: string;
   name: string;
@@ -31,6 +42,9 @@ interface VillaRow {
   bedrooms: number;
   bathrooms: number;
   pool: PoolType;
+  pool_width: number | null;
+  pool_length: number | null;
+  pool_depth: number | null;
   size_m2: number | null;
   distance_to_sea: number | null;
   distance_airport_km: number | null;
@@ -48,6 +62,8 @@ interface VillaRow {
   min_nights: number;
   base_price: number;
   cleaning_fee: number | null;
+  damage_deposit: number | null;
+  ministry_cert_no: string | null;
   service_rate: number | null;
   weekend_premium_percent: number | null;
   los_weekly_discount_percent: number | null;
@@ -90,6 +106,9 @@ function mapVilla(row: VillaRow): Villa {
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     pool: row.pool,
+    poolWidth: row.pool_width ?? null,
+    poolLength: row.pool_length ?? null,
+    poolDepth: row.pool_depth ?? null,
     size: row.size_m2 ?? 0,
     distanceToSea: row.distance_to_sea ?? 0,
     distanceAirportKm: row.distance_airport_km,
@@ -110,6 +129,8 @@ function mapVilla(row: VillaRow): Villa {
     minNights: row.min_nights,
     pricePerNight: Number(row.base_price),
     cleaningFee: row.cleaning_fee ?? undefined,
+    damageDeposit: row.damage_deposit ?? null,
+    ministryCertNo: row.ministry_cert_no ?? null,
     serviceRate: row.service_rate ?? undefined,
     weekendPremiumPercent: row.weekend_premium_percent,
     losWeeklyDiscountPercent: row.los_weekly_discount_percent,
@@ -135,27 +156,40 @@ function mapVilla(row: VillaRow): Villa {
 }
 
 export async function getVillas(): Promise<Villa[]> {
-  const { data, error } = await supabaseServer()
-    .from("villas")
-    .select(VILLA_FIELDS)
-    .eq("status", "published")
-    .order("featured", { ascending: false })
-    .order("name");
+  const run = (fields: string) =>
+    supabaseServer()
+      .from("villas")
+      .select(fields)
+      .eq("status", "published")
+      .order("featured", { ascending: false })
+      .order("name");
 
-  if (error) throw new Error(`Villalar okunamadı: ${error.message}`);
-  return (data as unknown as VillaRow[]).map(mapVilla);
+  let res = await run(VILLA_FIELDS);
+  // 0019 kolonları henüz yoksa bu alanlar olmadan tekrar dene.
+  if (res.error && isMissingExtraColumns(res.error.message)) {
+    res = await run(VILLA_FIELDS_BASE);
+  }
+
+  if (res.error) throw new Error(`Villalar okunamadı: ${res.error.message}`);
+  return (res.data as unknown as VillaRow[]).map(mapVilla);
 }
 
 export async function getVilla(slug: string): Promise<Villa | null> {
-  const { data, error } = await supabaseServer()
-    .from("villas")
-    .select(VILLA_FIELDS)
-    .eq("status", "published")
-    .eq("slug", slug)
-    .maybeSingle();
+  const run = (fields: string) =>
+    supabaseServer()
+      .from("villas")
+      .select(fields)
+      .eq("status", "published")
+      .eq("slug", slug)
+      .maybeSingle();
 
-  if (error) throw new Error(`Villa okunamadı (${slug}): ${error.message}`);
-  return data ? mapVilla(data as unknown as VillaRow) : null;
+  let res = await run(VILLA_FIELDS);
+  if (res.error && isMissingExtraColumns(res.error.message)) {
+    res = await run(VILLA_FIELDS_BASE);
+  }
+
+  if (res.error) throw new Error(`Villa okunamadı (${slug}): ${res.error.message}`);
+  return res.data ? mapVilla(res.data as unknown as VillaRow) : null;
 }
 
 export async function getVillaSlugs(): Promise<string[]> {

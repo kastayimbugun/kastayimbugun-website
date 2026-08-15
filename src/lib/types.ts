@@ -38,6 +38,10 @@ export interface Villa {
   bedrooms: number;
   bathrooms: number;
   pool: PoolType;
+  /** Havuz ölçüleri (metre) — panelde doldurulmazsa detayda gösterilmez. */
+  poolWidth?: number | null; // en
+  poolLength?: number | null; // boy
+  poolDepth?: number | null; // derinlik
   size: number; // m2
   distanceToSea: number; // meters
   /**
@@ -65,6 +69,10 @@ export interface Villa {
   pricePerNight: number; // base nightly price in TRY
   /** Temizlik bedeli (villa bazında; eskiden kodda sabitti) */
   cleaningFee?: number;
+  /** Hasar/güvence depozitosu (₺) — girişte alınır, sorunsuz çıkışta iade edilir. */
+  damageDeposit?: number | null;
+  /** T.C. Kültür ve Turizm Bakanlığı işletme belge numarası (villaya özel). */
+  ministryCertNo?: string | null;
   /** Hizmet bedeli oranı, ör. 0.05 */
   serviceRate?: number;
   /** Fiyat kuralları (Faz 5.7 / 4.3) — hepsi opsiyonel, calcPrice'ta uygulanır. */

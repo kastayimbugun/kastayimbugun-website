@@ -13,6 +13,8 @@ import {
   Clock,
   Moon,
   ChevronDown,
+  Wallet,
+  BadgeCheck,
 } from "lucide-react";
 import Gallery from "./Gallery";
 import AvailabilityCalendar from "./AvailabilityCalendar";
@@ -257,6 +259,73 @@ export default function VillaDetailClient({
           </section>
           )}
 
+          {/* Havuz Bilgileri */}
+          {prefs.sections.poolInfo &&
+            (villa.poolWidth || villa.poolLength || villa.poolDepth) && (
+            <section>
+              <h2 className="text-xl font-bold text-brand-950">
+                {lang === "tr" ? "Havuz Bilgileri" : "Pool Information"}
+              </h2>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {villa.pool !== "none" && (
+                  <span className="inline-flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-900">
+                    <Waves className="h-5 w-5 text-brand-600" />
+                    {villa.pool === "private"
+                      ? lang === "tr"
+                        ? "Özel Havuz"
+                        : "Private Pool"
+                      : lang === "tr"
+                      ? "Ortak Havuz"
+                      : "Shared Pool"}
+                  </span>
+                )}
+                {[
+                  { v: villa.poolWidth, tr: "En", en: "Width" },
+                  { v: villa.poolLength, tr: "Boy", en: "Length" },
+                  { v: villa.poolDepth, tr: "Derinlik", en: "Depth" },
+                ].map((d, i) =>
+                  d.v ? (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-sand-200 px-4 py-2.5 text-sm"
+                    >
+                      <span className="text-brand-900/55">
+                        {lang === "tr" ? d.tr : d.en}:
+                      </span>
+                      <span className="font-bold text-brand-900">{d.v} m</span>
+                    </span>
+                  ) : null
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Hasar Depozitosu */}
+          {prefs.sections.deposit &&
+            villa.damageDeposit != null &&
+            villa.damageDeposit > 0 && (
+            <section>
+              <h2 className="text-xl font-bold text-brand-950">
+                {lang === "tr" ? "Hasar Depozitosu" : "Damage Deposit"}
+              </h2>
+              <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-sand-200 bg-white p-5 sm:flex-row sm:items-center">
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                    <Wallet className="h-5 w-5" />
+                  </span>
+                  <span className="text-2xl font-extrabold text-brand-900">
+                    {formatPrice(villa.damageDeposit, lang)}
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed text-brand-900/70">
+                  {lang === "tr"
+                    ? "Hasar, kayıp, kırık-dökük vb. durumlar için girişte alınır; herhangi bir sorun olmadığı takdirde villa çıkışında iade edilir."
+                    : "Collected at check-in for damage, loss or breakage; refunded at check-out if there are no issues."}
+                </p>
+              </div>
+            </section>
+          )}
+
           {/* Availability */}
           {prefs.sections.availability && (
           <section ref={calendarRef} className="scroll-mt-32">
@@ -427,6 +496,45 @@ export default function VillaDetailClient({
               setGuests={setGuests}
               onScrollToCalendar={scrollToCalendar}
             />
+
+            {/* Bakanlık işletme belgesi — villaya özel, girildiyse gösterilir */}
+            {villa.ministryCertNo && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#e30613] p-3 text-white shadow-sm">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/bakanlik-amblem.svg"
+                    alt="T.C. Kültür ve Turizm Bakanlığı"
+                    className="h-11 w-11 shrink-0"
+                  />
+                  <span className="text-xs font-bold uppercase leading-tight tracking-wide">
+                    {lang === "tr" ? (
+                      <>
+                        T.C. Kültür ve
+                        <br />
+                        Turizm Bakanlığı
+                      </>
+                    ) : (
+                      <>
+                        Ministry of Culture
+                        <br />& Tourism
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2">
+                  <BadgeCheck className="h-5 w-5 shrink-0 text-[#e30613]" />
+                  <div className="leading-tight">
+                    <div className="text-[10px] font-medium text-brand-900/55">
+                      {lang === "tr" ? "Belge No" : "Certificate No"}
+                    </div>
+                    <div className="text-sm font-extrabold text-brand-950">
+                      {villa.ministryCertNo}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

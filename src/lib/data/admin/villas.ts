@@ -181,6 +181,9 @@ export interface AdminVillaFull {
   bedrooms: number;
   bathrooms: number;
   pool: PoolType;
+  poolWidth: number | null;
+  poolLength: number | null;
+  poolDepth: number | null;
   sizeM2: number | null;
   distanceToSea: number | null;
   distanceAirportKm: number | null;
@@ -198,6 +201,8 @@ export interface AdminVillaFull {
   minNights: number;
   basePrice: number;
   cleaningFee: number;
+  damageDeposit: number | null;
+  ministryCertNo: string | null;
   serviceRate: number;
   weekendPremiumPercent: number | null;
   losWeeklyDiscountPercent: number | null;
@@ -223,10 +228,7 @@ export async function getVillaForEdit(
   id: string
 ): Promise<AdminVillaFull | null> {
   const supabase = await supabaseSession();
-  const { data, error } = await supabase
-    .from("villas")
-    .select(
-      `id, slug, name, code, region_id, status, capacity, bedrooms, bathrooms,
+  const baseCols = `id, slug, name, code, region_id, status, capacity, bedrooms, bathrooms,
        pool, size_m2, distance_to_sea,
        distance_airport_km, distance_market_km, distance_restaurant_km,
        distance_transit_km, distance_center_km,
@@ -239,10 +241,23 @@ export async function getVillaForEdit(
        description_tr, description_en,
        video_url, amenities, updated_at,
        villa_images ( id, storage_path, sort_order, alt_tr ),
-       villa_categories ( category_id )`
-    )
+       villa_categories ( category_id )`;
+  const extraCols = `pool_width, pool_length, pool_depth, damage_deposit, ministry_cert_no`;
+
+  let { data, error } = await supabase
+    .from("villas")
+    .select(`${baseCols}, ${extraCols}`)
     .eq("id", id)
     .maybeSingle();
+
+  // 0019 kolonları yoksa bunlar olmadan tekrar dene.
+  if (error && /pool_width|pool_length|pool_depth|damage_deposit|ministry_cert_no/.test(error.message ?? "")) {
+    ({ data, error } = await supabase
+      .from("villas")
+      .select(baseCols)
+      .eq("id", id)
+      .maybeSingle());
+  }
 
   if (error) throw new Error(`Villa okunamadı: ${error.message}`);
   if (!data) return null;
@@ -268,6 +283,9 @@ export async function getVillaForEdit(
     bedrooms: r.bedrooms as number,
     bathrooms: r.bathrooms as number,
     pool: r.pool as PoolType,
+    poolWidth: (r.pool_width as number) ?? null,
+    poolLength: (r.pool_length as number) ?? null,
+    poolDepth: (r.pool_depth as number) ?? null,
     sizeM2: (r.size_m2 as number) ?? null,
     distanceToSea: (r.distance_to_sea as number) ?? null,
     distanceAirportKm: (r.distance_airport_km as number) ?? null,
@@ -285,6 +303,8 @@ export async function getVillaForEdit(
     minNights: r.min_nights as number,
     basePrice: Number(r.base_price),
     cleaningFee: Number(r.cleaning_fee ?? 0),
+    damageDeposit: (r.damage_deposit as number) ?? null,
+    ministryCertNo: (r.ministry_cert_no as string) ?? null,
     serviceRate: Number(r.service_rate ?? 0.05),
     weekendPremiumPercent: (r.weekend_premium_percent as number) ?? null,
     losWeeklyDiscountPercent: (r.los_weekly_discount_percent as number) ?? null,

@@ -70,6 +70,19 @@ export const villaFormSchema = z.object({
   bathrooms: z.coerce.number().int().min(0).max(50),
   pool: z.enum(["private", "shared", "none"]),
   sizeM2: z.coerce.number().int().min(0).max(100000),
+  // Havuz ölçüleri (m) — opsiyonel, ondalık olabilir (ör. derinlik 1.5).
+  poolWidth: z.preprocess(
+    emptyToNull,
+    z.coerce.number().min(0).max(200).nullable()
+  ),
+  poolLength: z.preprocess(
+    emptyToNull,
+    z.coerce.number().min(0).max(200).nullable()
+  ),
+  poolDepth: z.preprocess(
+    emptyToNull,
+    z.coerce.number().min(0).max(50).nullable()
+  ),
   distanceToSea: z.coerce.number().int().min(0).max(1000000),
   // Mesafe cetveli — hepsi opsiyonel (km). Boş bırakılırsa o satır gösterilmez.
   distanceAirportKm: z.preprocess(
@@ -108,6 +121,16 @@ export const villaFormSchema = z.object({
   minNights: z.coerce.number().int().min(1).max(60),
   basePrice: z.coerce.number().min(0, "Fiyat negatif olamaz"),
   cleaningFee: z.coerce.number().min(0),
+  // Hasar depozitosu (₺) — opsiyonel; boş bırakılırsa detayda gösterilmez.
+  damageDeposit: z.preprocess(
+    emptyToNull,
+    z.coerce.number().int().min(0).max(10000000).nullable()
+  ),
+  // T.C. Kültür ve Turizm Bakanlığı belge no — opsiyonel metin (ör. "48-6108").
+  ministryCertNo: z.preprocess(
+    emptyToNull,
+    z.string().trim().max(40, "Belge no en fazla 40 karakter").nullable()
+  ),
   serviceRate: z.coerce.number().min(0).max(1),
   // Fiyat kuralları (4.3) — hepsi opsiyonel; boş/0 uygulanmaz.
   weekendPremiumPercent: z.preprocess(

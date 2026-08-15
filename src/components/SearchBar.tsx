@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MapPin,
-  CalendarDays,
   Search,
   Home,
   Gem,
@@ -12,9 +11,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { toISO } from "@/lib/format";
 import type { Region } from "@/lib/data/villas";
 import GuestSelector, { type GuestCounts } from "./GuestSelector";
+import DateRangePicker from "./DateRangePicker";
 
 function Segment({
   icon: Icon,
@@ -74,12 +73,6 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
     return () => window.removeEventListener("resize", updateScrollHint);
   }, [updateScrollHint]);
 
-  const today = toISO(new Date());
-  // Çıkış girişten en az bir gün sonra olmalı
-  const minCheckOut = checkIn
-    ? toISO(new Date(new Date(checkIn + "T00:00:00").getTime() + 86400000))
-    : today;
-
   const submit = () => {
     const p = new URLSearchParams();
     if (mode === "name") {
@@ -126,18 +119,6 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
 
   const inputCls =
     "w-full bg-transparent text-sm font-semibold text-brand-950 outline-none placeholder:text-brand-900/40";
-
-  // Tarih alanının herhangi bir yerine tıklanınca yerel takvimi aç
-  const openPicker = (e: React.MouseEvent<HTMLElement>) => {
-    const input = e.currentTarget.querySelector("input") as
-      | (HTMLInputElement & { showPicker?: () => void })
-      | null;
-    try {
-      input?.showPicker?.();
-    } catch {
-      /* showPicker desteklenmiyorsa yoksay */
-    }
-  };
 
   return (
     <div className="w-full">
@@ -231,7 +212,6 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
                 >
                   <option value="">{t("search.regionPh")}</option>
                   {(() => {
-                    const regMap = new Map(regions.map((r) => [r.id, r]));
                     const childMap = new Map<string, Region[]>();
 
                     regions.forEach((r) => {
@@ -299,38 +279,14 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
                 </select>
               </Segment>
 
-              <Segment
-                icon={CalendarDays}
-                label={t("search.checkIn")}
-                onClick={openPicker}
-              >
-                <input
-                  type="date"
-                  min={today}
-                  value={checkIn}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setCheckIn(v);
-                    // Çıkış artık geçersizse temizle
-                    if (checkOut && checkOut <= v) setCheckOut("");
-                  }}
-                  className={inputCls}
-                />
-              </Segment>
-
-              <Segment
-                icon={CalendarDays}
-                label={t("search.checkOut")}
-                onClick={openPicker}
-              >
-                <input
-                  type="date"
-                  min={minCheckOut}
-                  value={checkOut}
-                  onChange={(e) => setCheckOut(e.target.value)}
-                  className={inputCls}
-                />
-              </Segment>
+              <DateRangePicker
+                checkIn={checkIn}
+                checkOut={checkOut}
+                onChange={(ci, co) => {
+                  setCheckIn(ci);
+                  setCheckOut(co);
+                }}
+              />
 
               <GuestSelector value={guests} onChange={setGuests} />
             </div>

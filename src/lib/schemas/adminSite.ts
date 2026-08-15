@@ -111,6 +111,12 @@ export const siteSettingsSchema = z.object({
   // yalnızca listelenenler. Boş dizi geçerli (hiçbiri) — o yüzden .nullable().
   homeRegions: z.array(z.string()).nullable().optional(),
 
+  // Ana sayfa bölüm sırası + aç/kapa. null → varsayılan sıra.
+  homeSections: z
+    .array(z.object({ key: z.string(), enabled: z.boolean() }))
+    .nullable()
+    .optional(),
+
   // Filigran (watermark) ayarları — fotoğraflar sunucuya yüklenirken logo otomatik eklenir.
   watermarkEnabled: z.boolean().default(true),
   watermarkOpacity: z.number().min(0).max(1).default(0.35),

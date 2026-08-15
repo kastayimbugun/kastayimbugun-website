@@ -12,9 +12,11 @@ import {
   FileText,
   Pencil,
   Loader2,
+  Trash2,
 } from "lucide-react";
-import { updateBookingPayment } from "@/lib/actions/admin/bookings";
+import { updateBookingPayment, deleteBooking } from "@/lib/actions/admin/bookings";
 import { useToast } from "@/components/admin/ui/Toast";
+import { useConfirm } from "@/components/admin/ui/ConfirmDialog";
 import { Field } from "@/components/admin/ui/FormField";
 import StatusBadge from "@/components/admin/ui/StatusBadge";
 import BookingStatusSelect from "@/components/admin/BookingStatusSelect";
@@ -39,8 +41,10 @@ function waHref(phone: string): string {
 export default function BookingRow({ booking: r }: { booking: AdminBooking }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [editingPayment, setEditingPayment] = useState(false);
   const [pending, start] = useTransition();
+  const [pendingDelete, startDelete] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     paidAmount: String(r.paidAmount),
@@ -75,6 +79,45 @@ export default function BookingRow({ booking: r }: { booking: AdminBooking }) {
           res.error === "auth"
             ? "Oturumunuz sona ermiş. Yeniden giriş yapın."
             : "Kaydedilemedi."
+        );
+      }
+    });
+  };
+
+  const handleDelete = async () => {
+    const isConfirmed = r.status === "confirmed";
+    const ok = await confirm({
+      title: isConfirmed ? "Rezervasyonu sil?" : "Talebi sil?",
+      body: (
+        <div className="space-y-1.5 text-sm text-brand-900/80">
+          <p>
+            <strong className="text-brand-950">{r.fullName}</strong> adına kayıtlı{" "}
+            <strong className="text-brand-950">{r.villaName}</strong> ({formatDateRange(r.checkIn, r.checkOut)}) kaydını kalıcı olarak silmek istediğinize emin misiniz?
+          </p>
+          {isConfirmed && (
+            <p className="text-xs font-semibold text-rose-700">
+              Dikkat: Bu onaylı bir rezervasyondur. Silindiğinde villa takvimindeki blok kaldırılacak ve tarihler yeniden açılacaktır.
+            </p>
+          )}
+        </div>
+      ),
+      confirmLabel: "Evet, sil",
+      cancelLabel: "Vazgeç",
+      tone: "danger",
+    });
+
+    if (!ok) return;
+
+    startDelete(async () => {
+      const res = await deleteBooking({ id: r.id });
+      if (res.ok) {
+        toast.success(isConfirmed ? "Rezervasyon silindi." : "Talep silindi.");
+        router.refresh();
+      } else {
+        toast.error(
+          res.error === "auth"
+            ? "Oturumunuz sona ermiş. Yeniden giriş yapın."
+            : "Silme işlemi başarısız oldu."
         );
       }
     });
@@ -134,6 +177,19 @@ export default function BookingRow({ booking: r }: { booking: AdminBooking }) {
             <FileText className="h-3 w-3" />
             Konfirmasyon
           </Link>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={pendingDelete}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-800 hover:underline disabled:opacity-50"
+          >
+            {pendingDelete ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Trash2 className="h-3 w-3" />
+            )}
+            Sil
+          </button>
         </div>
       </div>
 

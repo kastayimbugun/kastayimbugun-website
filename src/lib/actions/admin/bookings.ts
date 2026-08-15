@@ -9,6 +9,7 @@ import {
   bookingPaymentSchema,
   bookingNoteSchema,
   manualBookingSchema,
+  deleteBookingSchema,
 } from "@/lib/schemas/adminBooking";
 import { cancelReservationSchema } from "@/lib/schemas/adminVilla";
 import { toFieldErrors } from "@/lib/schemas/fieldErrors";
@@ -440,4 +441,64 @@ export async function createManualBooking(
   revalidatePath(`/yonetim/villalar/${d.villaId}`);
   if (villa?.slug) revalidatePath(`/villa/${villa.slug}`);
   return { ok: true, id: row.id };
+}
+
+/**
+ * Rezervasyon talebini veya onaylı rezervasyonu siler.
+ * Eğer onaylı ise (status === "confirmed"), takvimdeki booking bloğunu da kaldırır.
+ * Bağlı arama notları veritabanında cascade ile silinir.
+ */
+export async function deleteBooking(
+  input: unknown
+): Promise<BookingActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "auth" };
+
+  const parsed = deleteBookingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "validation", fields: toFieldErrors(parsed.error) };
+  }
+  const { id } = parsed.data;
+
+  const supabase = await supabaseSession();
+
+  // Talebin mevcut durumunu ve villa/tarih bilgilerini oku
+  const { data: booking, error: readErr } = await supabase
+    .from("booking_requests")
+    .select("villa_id, check_in, check_out, status, villas ( slug )")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (readErr || !booking) return { ok: false, error: "generic" };
+
+  const villaId = booking.villa_id as string | null;
+  const slug = (booking.villas as unknown as { slug: string } | null)?.slug ?? null;
+
+  // Onaylıysa takvimdeki bloğu kaldır
+  if (booking.status === "confirmed" && villaId) {
+    await supabase
+      .from("villa_blocks")
+      .delete()
+      .eq("villa_id", villaId)
+      .eq("starts_on", booking.check_in)
+      .eq("ends_on", booking.check_out)
+      .eq("source", "booking");
+  }
+
+  // Talebi sil
+  const { error: delErr } = await supabase
+    .from("booking_requests")
+    .delete()
+    .eq("id", id);
+
+  if (delErr) return { ok: false, error: "generic" };
+
+  revalidatePath("/yonetim/talepler");
+  revalidatePath("/yonetim/rezervasyonlar");
+  revalidatePath(`/yonetim/talepler/${id}`);
+  revalidatePath("/yonetim");
+  if (villaId) revalidatePath(`/yonetim/villalar/${villaId}`);
+  if (slug) revalidatePath(`/villa/${slug}`);
+
+  return { ok: true };
 }

@@ -4,7 +4,17 @@ import React from "react";
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical, Droplets, Image as ImageIcon } from "lucide-react";
+import {
+  GripVertical,
+  Droplets,
+  Image as ImageIcon,
+  Star,
+  Zap,
+  MapPin,
+  LayoutList,
+  Plus,
+  X,
+} from "lucide-react";
 import ImageUploadField from "@/components/admin/ImageUploadField";
 import Tabs from "@/components/admin/Tabs";
 import {
@@ -36,11 +46,20 @@ import type {
   SimilarMode,
 } from "@/lib/villaDetailPrefs";
 import type { HeaderConfig, FooterConfig } from "@/lib/headerFooter";
+import {
+  reconcileHomeSections,
+  isCategoryKey,
+  categorySlugOf,
+  categoryKey,
+  SPECIAL_LABELS,
+  type HomeSectionItem,
+} from "@/lib/homeSections";
 import HeaderEditor from "./HeaderEditor";
 import FooterEditor from "./FooterEditor";
 
 interface CategoryHomeItemState {
   id: string;
+  slug: string;
   nameTr: string;
   color: string | null;
   villaCount: number;
@@ -125,6 +144,7 @@ function fromCategories(cats: AdminCategoryListItem[]): CategoryHomeItemState[] 
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map((c, i) => ({
       id: c.id,
+      slug: c.slug,
       nameTr: c.nameTr,
       color: c.color ?? null,
       villaCount: c.villaCount ?? 0,
@@ -210,9 +230,39 @@ export default function SiteSettingsForm({
     useState<Set<string>>(initialRegionSel);
   const [regionSel, setRegionSel] = useState<Set<string>>(initialRegionSel);
 
+  // Ana sayfa bölüm sırası (Öne Çıkan / Banner / Fırsat / kategori satırları).
+  // Öne çıkan kategori slug'ları canlı olarak kategori listesinden gelir.
+  const featuredSlugs = useMemo(
+    () => catList.filter((c) => c.featuredOnHome).map((c) => c.slug),
+    [catList]
+  );
+  const initialSections = useMemo(
+    () =>
+      reconcileHomeSections(
+        settings.homeSections,
+        fromCategories(categories)
+          .filter((c) => c.featuredOnHome)
+          .map((c) => c.slug)
+      ),
+    [settings.homeSections, categories]
+  );
+  const [savedSections, setSavedSections] =
+    useState<HomeSectionItem[]>(initialSections);
+  const [sections, setSections] = useState<HomeSectionItem[]>(initialSections);
+
+  // Kategori "Vitrin Satırı" (featuredOnHome) değişince listeyi render sırasında
+  // uzlaştır (effect'te setState yerine): yeni öne çıkanı ekler, çıkarılanı düşürür.
+  const displaySections = useMemo(
+    () => reconcileHomeSections(sections, featuredSlugs),
+    [sections, featuredSlugs]
+  );
+
   // Sürükle-bırak sıralama — id sürüklenen, overId üzerine gelinen satır.
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  // Bölüm listesi için ayrı sürükle-bırak durumu.
+  const [secDragKey, setSecDragKey] = useState<string | null>(null);
+  const [secOverKey, setSecOverKey] = useState<string | null>(null);
 
   const dirty = useMemo(() => {
     const textDirty = JSON.stringify(f) !== JSON.stringify(saved);
@@ -240,8 +290,10 @@ export default function SiteSettingsForm({
     const watermarkDirty = JSON.stringify(watermark) !== JSON.stringify(savedWatermark);
     const serializeSel = (s: Set<string>) => [...s].sort().join(",");
     const regionDirty = serializeSel(regionSel) !== serializeSel(savedRegionSel);
+    const sectionsDirty =
+      JSON.stringify(displaySections) !== JSON.stringify(savedSections);
     return (
-      textDirty || catDirty || prefsDirty || adDirty || headerDirty || footerDirty || watermarkDirty || regionDirty
+      textDirty || catDirty || prefsDirty || adDirty || headerDirty || footerDirty || watermarkDirty || regionDirty || sectionsDirty
     );
   }, [
     f,
@@ -260,6 +312,8 @@ export default function SiteSettingsForm({
     savedWatermark,
     regionSel,
     savedRegionSel,
+    displaySections,
+    savedSections,
   ]);
 
   useUnsavedGuard(dirty);
@@ -310,6 +364,76 @@ export default function SiteSettingsForm({
   const selectAllRegions = () => setRegionSel(new Set(allRegionSlugs));
   const clearAllRegions = () => setRegionSel(new Set());
 
+  // Bölüm listesi: taşı ve aç/kapa. Önce canlı verilerle uzlaştırıp öyle değiştir.
+  const moveSection = (fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
+    setSections((prev) => {
+      const list = reconcileHomeSections(prev, featuredSlugs);
+      const from = list.findIndex((s) => s.key === fromKey);
+      const to = list.findIndex((s) => s.key === toKey);
+      if (from === -1 || to === -1) return list;
+      const [moved] = list.splice(from, 1);
+      list.splice(to, 0, moved);
+      return list;
+    });
+  };
+  const toggleSectionEnabled = (key: string, enabled: boolean) =>
+    setSections((prev) =>
+      reconcileHomeSections(prev, featuredSlugs).map((s) =>
+        s.key === key ? { ...s, enabled } : s
+      )
+    );
+
+  // Bir kategoriyi vitrin satırı yap / kaldır (builder'da ekle/çıkar ile).
+  const setCategoryFeatured = (slug: string, value: boolean) =>
+    setCatList((prev) =>
+      prev.map((c) => (c.slug === slug ? { ...c, featuredOnHome: value } : c))
+    );
+
+  // Builder: blok ekle (özel bölümü aç ya da kategoriyi vitrine al).
+  const addBlock = (key: string) => {
+    if (isCategoryKey(key)) setCategoryFeatured(categorySlugOf(key), true);
+    else toggleSectionEnabled(key, true);
+  };
+  // Builder: blok çıkar (özel bölümü kapat ya da kategoriyi vitrinden al).
+  const removeBlock = (key: string) => {
+    if (isCategoryKey(key)) setCategoryFeatured(categorySlugOf(key), false);
+    else toggleSectionEnabled(key, false);
+  };
+
+  // Builder türetilmiş listeler.
+  const visibleBlocks = displaySections.filter((s) => s.enabled);
+  const addableSpecials = displaySections.filter(
+    (s) => !s.enabled && !isCategoryKey(s.key)
+  );
+  const addableCats = catList.filter((c) => !c.featuredOnHome);
+
+  // Üst kayar şerit — aynı ekle/çıkar mantığı (showInBrowser).
+  const stripCats = catList.filter((c) => c.showInBrowser);
+  const addableStripCats = catList.filter((c) => !c.showInBrowser);
+
+  const sectionLabel = (key: string) =>
+    isCategoryKey(key)
+      ? catList.find((c) => c.slug === categorySlugOf(key))?.nameTr ??
+        categorySlugOf(key)
+      : SPECIAL_LABELS[key as keyof typeof SPECIAL_LABELS] ?? key;
+
+  const sectionIcon = (key: string) => {
+    if (isCategoryKey(key)) return <LayoutList className="h-4 w-4" />;
+    switch (key) {
+      case "featured":
+        return <Star className="h-4 w-4" />;
+      case "banner":
+        return <ImageIcon className="h-4 w-4" />;
+      case "shortStay":
+        return <Zap className="h-4 w-4" />;
+      case "regions":
+        return <MapPin className="h-4 w-4" />;
+      default:
+        return <LayoutList className="h-4 w-4" />;
+    }
+  };
+
   const submit = () => {
     setErrors({});
     // Tümü seçiliyse null gönder (= hepsi; ileride eklenen bölgeler de görünsün).
@@ -332,6 +456,7 @@ export default function SiteSettingsForm({
           watermarkScale: watermark.scale,
           watermarkPosition: watermark.position,
           homeRegions: homeRegionsPayload,
+          homeSections: displaySections,
         }),
         saveCategoryHomeSettings(
           catList.map((c) => ({
@@ -352,6 +477,7 @@ export default function SiteSettingsForm({
         setSavedFooter(footer);
         setSavedWatermark(watermark);
         setSavedRegionSel(new Set(regionSel));
+        setSavedSections(displaySections);
         toast.success("Ayarlar kaydedildi.");
         router.refresh();
         return;
@@ -481,26 +607,27 @@ export default function SiteSettingsForm({
         </div>
       </Section>
 
-      <Section title="Ana Sayfa Kategorileri">
+      <Section title="Üst Kayar Şerit (Kategoriler)">
         <p className="mb-3 text-sm text-brand-900/70">
-          Kategorilerin üst kayar şeritte ve vitrin satırlarında görünürlüğünü
-          ayarlayın. Gösterim sırasını değiştirmek için satırları{" "}
+          Ana sayfanın en üstündeki <strong>yatay kayar kategori şeridi</strong>.
+          Şeritte görünecek kategorileri sırayla dizin: sırayı{" "}
           <span className="inline-flex items-center gap-0.5 font-medium text-brand-800">
-            <GripVertical className="h-3.5 w-3.5" /> tutup sürükleyin
-          </span>
-          .
+            <GripVertical className="h-3.5 w-3.5" /> sürükleyerek
+          </span>{" "}
+          değiştirin, <X className="inline h-3.5 w-3.5" /> ile çıkarın, alttan
+          yenisini ekleyin. (Kategori satırlarının ana sayfada vitrin olarak
+          görünmesi aşağıdaki <strong>&quot;Ana Sayfa Düzeni&quot;</strong>{" "}
+          bölümünden yönetilir.)
         </p>
-        {catList.length === 0 ? (
-          <p className="text-sm text-brand-900/70">Henüz kategori bulunmuyor.</p>
-        ) : (
-          <div className="overflow-hidden rounded-xl border border-sand-200 bg-white">
-            <div className="hidden sm:grid sm:grid-cols-12 sm:gap-4 sm:bg-sand-50 sm:px-4 sm:py-3 text-xs font-semibold text-brand-900/70 border-b border-sand-200">
-              <div className="sm:col-span-5">Kategori</div>
-              <div className="sm:col-span-4">Üst Kayar Şerit</div>
-              <div className="sm:col-span-3">Vitrin Satırı</div>
-            </div>
-            <div className="divide-y divide-sand-200">
-              {catList.map((cat) => {
+
+        <div className="overflow-hidden rounded-xl border border-sand-200 bg-white">
+          <div className="divide-y divide-sand-200">
+            {stripCats.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-brand-900/60">
+                Şeritte kategori yok — aşağıdan ekleyin.
+              </p>
+            ) : (
+              stripCats.map((cat) => {
                 const isDragging = dragId === cat.id;
                 const isOver = overId === cat.id && dragId !== cat.id;
                 return (
@@ -516,7 +643,7 @@ export default function SiteSettingsForm({
                       setDragId(null);
                       setOverId(null);
                     }}
-                    className={`grid gap-3 p-4 sm:grid-cols-12 sm:gap-4 sm:items-center sm:px-4 sm:py-3 text-sm transition ${
+                    className={`flex items-center gap-3 px-4 py-3 text-sm transition ${
                       isDragging ? "opacity-40" : ""
                     } ${
                       isOver
@@ -524,75 +651,209 @@ export default function SiteSettingsForm({
                         : "bg-white"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 font-semibold text-brand-950 sm:col-span-5">
-                      <button
-                        type="button"
-                        draggable
-                        onDragStart={(e) => {
-                          setDragId(cat.id);
-                          e.dataTransfer.effectAllowed = "move";
-                        }}
-                        onDragEnd={() => {
-                          setDragId(null);
-                          setOverId(null);
-                        }}
-                        aria-label={`${cat.nameTr} sırasını değiştir`}
-                        title="Sürükleyerek sıralayın"
-                        className="shrink-0 cursor-grab touch-none rounded-md p-1 text-brand-900/40 hover:bg-sand-100 hover:text-brand-700 active:cursor-grabbing"
-                      >
-                        <GripVertical className="h-5 w-5" />
-                      </button>
-                      <span
-                        className="inline-block h-3 w-3 shrink-0 rounded-full ring-1 ring-inset ring-black/10"
-                        style={{ backgroundColor: cat.color ?? "#cbd5e1" }}
-                      />
-                      <span className="min-w-0 truncate">{cat.nameTr}</span>
-                      {cat.autoRule ? (
-                        <span className="shrink-0 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
-                          Otomatik · {AUTO_RULE_LABEL[cat.autoRule] ?? cat.autoRule}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-sand-100 px-2 py-0.5 text-xs font-medium text-brand-900/60">
-                          {cat.villaCount} villa
-                        </span>
-                      )}
-                    </div>
-                    <div className="sm:col-span-4">
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={cat.showInBrowser}
-                          onChange={(e) =>
-                            updateCategoryItem(cat.id, "showInBrowser", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-sand-300 text-brand-600 focus:ring-brand-500"
-                        />
-                        <span className="text-xs text-brand-900/80 sm:text-sm">
-                          Üst Kayar Şeritte Göster
-                        </span>
-                      </label>
-                    </div>
-                    <div className="sm:col-span-3">
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={cat.featuredOnHome}
-                          onChange={(e) =>
-                            updateCategoryItem(cat.id, "featuredOnHome", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-sand-300 text-brand-600 focus:ring-brand-500"
-                        />
-                        <span className="text-xs text-brand-900/80 sm:text-sm">
-                          Vitrin Satırı Olarak Göster
-                        </span>
-                      </label>
-                    </div>
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        setDragId(cat.id);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setOverId(null);
+                      }}
+                      aria-label={`${cat.nameTr} sırasını değiştir`}
+                      title="Sürükleyerek sıralayın"
+                      className="shrink-0 cursor-grab touch-none rounded-md p-1 text-brand-900/40 hover:bg-sand-100 hover:text-brand-700 active:cursor-grabbing"
+                    >
+                      <GripVertical className="h-5 w-5" />
+                    </button>
+                    <span
+                      className="inline-block h-3 w-3 shrink-0 rounded-full ring-1 ring-inset ring-black/10"
+                      style={{ backgroundColor: cat.color ?? "#cbd5e1" }}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-semibold text-brand-950">
+                      {cat.nameTr}
+                    </span>
+                    {cat.autoRule ? (
+                      <span className="shrink-0 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
+                        Otomatik · {AUTO_RULE_LABEL[cat.autoRule] ?? cat.autoRule}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-sand-100 px-2 py-0.5 text-xs font-medium text-brand-900/60">
+                        {cat.villaCount} villa
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => updateCategoryItem(cat.id, "showInBrowser", false)}
+                      aria-label={`${cat.nameTr} kategorisini şeritten çıkar`}
+                      title="Şeritten çıkar"
+                      className="shrink-0 rounded-md p-1.5 text-brand-900/40 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 );
-              })}
-            </div>
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Kategori ekle */}
+        {addableStripCats.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <Plus className="h-4 w-4 shrink-0 text-brand-600" />
+            <select
+              aria-label="Şeride kategori ekle"
+              value=""
+              onChange={(e) => {
+                if (e.target.value)
+                  updateCategoryItem(e.target.value, "showInBrowser", true);
+              }}
+              className={`${inputCls} max-w-xs`}
+            >
+              <option value="">+ Kategori ekle…</option>
+              {addableStripCats.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nameTr}
+                </option>
+              ))}
+            </select>
           </div>
         )}
+      </Section>
+
+      <Section title="Ana Sayfa Düzeni">
+        <p className="mb-3 text-sm text-brand-900/70">
+          Ana sayfadaki bölümleri tek listede yönetin: görünme sırasını{" "}
+          <span className="inline-flex items-center gap-0.5 font-medium text-brand-800">
+            <GripVertical className="h-3.5 w-3.5" /> sürükleyerek
+          </span>{" "}
+          değiştirin, sağdaki <X className="inline h-3.5 w-3.5" /> ile kaldırın,
+          alttaki <strong>&quot;+ Blok ekle&quot;</strong> ile yeni bölüm veya
+          kategori ekleyin.
+        </p>
+
+        <div className="overflow-hidden rounded-xl border border-sand-200 bg-white">
+          <div className="divide-y divide-sand-200">
+            {visibleBlocks.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-brand-900/60">
+                Henüz blok yok — aşağıdan ekleyin.
+              </p>
+            ) : (
+              visibleBlocks.map((s) => {
+                const isSecDragging = secDragKey === s.key;
+                const isSecOver = secOverKey === s.key && secDragKey !== s.key;
+                const isCat = isCategoryKey(s.key);
+                return (
+                  <div
+                    key={s.key}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (secDragKey && secDragKey !== s.key) setSecOverKey(s.key);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (secDragKey) moveSection(secDragKey, s.key);
+                      setSecDragKey(null);
+                      setSecOverKey(null);
+                    }}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm transition ${
+                      isSecDragging ? "opacity-40" : ""
+                    } ${
+                      isSecOver
+                        ? "bg-brand-50 ring-2 ring-inset ring-brand-400"
+                        : "bg-white"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        setSecDragKey(s.key);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setSecDragKey(null);
+                        setSecOverKey(null);
+                      }}
+                      aria-label={`${sectionLabel(s.key)} sırasını değiştir`}
+                      title="Sürükleyerek sıralayın"
+                      className="shrink-0 cursor-grab touch-none rounded-md p-1 text-brand-900/40 hover:bg-sand-100 hover:text-brand-700 active:cursor-grabbing"
+                    >
+                      <GripVertical className="h-5 w-5" />
+                    </button>
+
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sand-100 text-brand-700">
+                      {sectionIcon(s.key)}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-semibold text-brand-950">
+                        {sectionLabel(s.key)}
+                      </div>
+                      <div className="text-xs text-brand-900/55">
+                        {isCat ? "Kategori satırı" : "Bölüm"}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeBlock(s.key)}
+                      aria-label={`${sectionLabel(s.key)} bölümünü kaldır`}
+                      title="Ana sayfadan kaldır"
+                      className="shrink-0 rounded-md p-1.5 text-brand-900/40 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Blok ekle */}
+        <div className="mt-3 flex items-center gap-2">
+          <Plus className="h-4 w-4 shrink-0 text-brand-600" />
+          <select
+            aria-label="Blok ekle"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) addBlock(e.target.value);
+            }}
+            className={`${inputCls} max-w-xs`}
+          >
+            <option value="">+ Blok ekle…</option>
+            {addableSpecials.length > 0 && (
+              <optgroup label="Bölümler">
+                {addableSpecials.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {SPECIAL_LABELS[s.key as keyof typeof SPECIAL_LABELS]}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {addableCats.length > 0 && (
+              <optgroup label="Kategoriler">
+                {addableCats.map((c) => (
+                  <option key={c.id} value={categoryKey(c.slug)}>
+                    {c.nameTr}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+
+        <p className="mt-3 text-xs text-brand-900/55">
+          Not: Reklam Bandı yalnızca aşağıdaki{" "}
+          <strong>&quot;Reklam / Kampanya Bandı&quot;</strong> bölümünden görsel
+          yüklendiğinde ve ilgili platform açık olduğunda görünür. Popüler
+          Bölgeler&apos;in içeriği aşağıdaki{" "}
+          <strong>&quot;Ana Sayfa Bölgeleri&quot;</strong> bölümünden seçilir.
+        </p>
       </Section>
 
       <Section title="Ana Sayfa Bölgeleri">
@@ -821,6 +1082,8 @@ export default function SiteSettingsForm({
         <div className="grid gap-1 sm:grid-cols-2">
           {cbRow(prefs.sections.overview, (v) => setSection("overview", v), "Genel Bakış")}
           {cbRow(prefs.sections.amenities, (v) => setSection("amenities", v), "Villa Özellikleri")}
+          {cbRow(prefs.sections.poolInfo, (v) => setSection("poolInfo", v), "Havuz Bilgileri")}
+          {cbRow(prefs.sections.deposit, (v) => setSection("deposit", v), "Hasar Depozitosu")}
           {cbRow(prefs.sections.availability, (v) => setSection("availability", v), "Müsaitlik Takvimi")}
           {cbRow(prefs.sections.distances, (v) => setSection("distances", v), "Uzaklıklar")}
           {cbRow(prefs.sections.video, (v) => setSection("video", v), "Video")}

@@ -36,6 +36,9 @@ function toVillaRow(d: Omit<VillaFormInput, "categoryIds">) {
     bedrooms: d.bedrooms,
     bathrooms: d.bathrooms,
     pool: d.pool,
+    pool_width: d.poolWidth,
+    pool_length: d.poolLength,
+    pool_depth: d.poolDepth,
     size_m2: d.sizeM2,
     distance_to_sea: d.distanceToSea,
     distance_airport_km: d.distanceAirportKm,
@@ -53,6 +56,8 @@ function toVillaRow(d: Omit<VillaFormInput, "categoryIds">) {
     min_nights: d.minNights,
     base_price: d.basePrice,
     cleaning_fee: d.cleaningFee,
+    damage_deposit: d.damageDeposit,
+    ministry_cert_no: d.ministryCertNo,
     service_rate: d.serviceRate,
     weekend_premium_percent: d.weekendPremiumPercent,
     los_weekly_discount_percent: d.losWeeklyDiscountPercent,
@@ -67,6 +72,26 @@ function toVillaRow(d: Omit<VillaFormInput, "categoryIds">) {
     amenities: d.amenities,
   };
 }
+
+/** 0019 kolonları henüz uygulanmadıysa satırdan bunları çıkarır (fallback). */
+function stripExtraVillaCols<T extends Record<string, unknown>>(row: T) {
+  const {
+    pool_width: _pw,
+    pool_length: _pl,
+    pool_depth: _pd,
+    damage_deposit: _dd,
+    ministry_cert_no: _mc,
+    ...rest
+  } = row;
+  void [_pw, _pl, _pd, _dd, _mc];
+  return rest;
+}
+
+/** 0019 kolonları eksik mi (migration uygulanmamış)? */
+const isMissingVillaExtraCols = (message: string | undefined) =>
+  /pool_width|pool_length|pool_depth|damage_deposit|ministry_cert_no/.test(
+    message ?? ""
+  );
 
 export type VillaSaveResult =
   | { ok: true; id: string }
@@ -126,10 +151,18 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
 
   // Eşzamanlı düzenleme koruması (docs/panel-kurallari.md §3): form açıldıktan
   // sonra satır değiştiyse WHERE eşleşmez, kimse kimsenin işini sessizce ezmez.
-  let query = supabase.from("villas").update(toVillaRow(fields)).eq("id", id);
-  if (updatedAt) query = query.eq("updated_at", updatedAt);
+  const runUpdate = (row: Record<string, unknown>) => {
+    let query = supabase.from("villas").update(row).eq("id", id);
+    if (updatedAt) query = query.eq("updated_at", updatedAt);
+    return query.select("id").maybeSingle();
+  };
 
-  const { data: saved, error } = await query.select("id").maybeSingle();
+  const villaRow = toVillaRow(fields);
+  let { data: saved, error } = await runUpdate(villaRow);
+  // 0019 kolonları yoksa bu alanlar olmadan tekrar dene.
+  if (error && isMissingVillaExtraCols(error.message)) {
+    ({ data: saved, error } = await runUpdate(stripExtraVillaCols(villaRow)));
+  }
 
   if (error) {
     if (error.code === "23505") {
@@ -165,11 +198,21 @@ export async function createVilla(input: unknown): Promise<VillaSaveResult> {
   }
 
   const supabase = await supabaseSession();
-  const { data, error } = await supabase
+  const villaRow = toVillaRow(parsed.data);
+  let { data, error } = await supabase
     .from("villas")
-    .insert(toVillaRow(parsed.data))
+    .insert(villaRow)
     .select("id")
     .single();
+
+  // 0019 kolonları yoksa bu alanlar olmadan tekrar dene.
+  if (error && isMissingVillaExtraCols(error.message)) {
+    ({ data, error } = await supabase
+      .from("villas")
+      .insert(stripExtraVillaCols(villaRow))
+      .select("id")
+      .single());
+  }
 
   if (error || !data) {
     if (error?.code === "23505") {

@@ -49,6 +49,10 @@ export const updateBookingStatusSchema = z
     path: ["lostReason"],
   });
 
+export const deleteBookingSchema = z.object({
+  id: z.uuid(),
+});
+
 /**
  * Arama notu. Personel değişiminde bilgi kaybını sıfırlayan tek şey bu:
  * "14:20 aradım, meşguldü" / "15:00 fiyat gönderildi".

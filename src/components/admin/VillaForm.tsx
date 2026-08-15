@@ -30,6 +30,9 @@ type FormState = {
   bedrooms: string;
   bathrooms: string;
   pool: string;
+  poolWidth: string;
+  poolLength: string;
+  poolDepth: string;
   sizeM2: string;
   distanceToSea: string;
   distanceAirportKm: string;
@@ -47,6 +50,8 @@ type FormState = {
   minNights: string;
   basePrice: string;
   cleaningFee: string;
+  damageDeposit: string;
+  ministryCertNo: string;
   serviceRate: string;
   weekendPremiumPercent: string;
   losWeeklyDiscountPercent: string;
@@ -76,6 +81,9 @@ function fromVilla(v: AdminVillaFull | null): FormState {
     bedrooms: String(v?.bedrooms ?? 1),
     bathrooms: String(v?.bathrooms ?? 1),
     pool: v?.pool ?? "private",
+    poolWidth: str(v?.poolWidth),
+    poolLength: str(v?.poolLength),
+    poolDepth: str(v?.poolDepth),
     sizeM2: String(v?.sizeM2 ?? 0),
     distanceToSea: String(v?.distanceToSea ?? 0),
     distanceAirportKm: v?.distanceAirportKm != null ? String(v.distanceAirportKm) : "",
@@ -94,6 +102,8 @@ function fromVilla(v: AdminVillaFull | null): FormState {
     minNights: String(v?.minNights ?? 1),
     basePrice: String(v?.basePrice ?? 0),
     cleaningFee: String(v?.cleaningFee ?? 0),
+    damageDeposit: str(v?.damageDeposit),
+    ministryCertNo: v?.ministryCertNo ?? "",
     serviceRate: String(v?.serviceRate ?? 0.05),
     weekendPremiumPercent: str(v?.weekendPremiumPercent),
     losWeeklyDiscountPercent: str(v?.losWeeklyDiscountPercent),
@@ -128,6 +138,19 @@ export default function VillaForm({
 
   const [saved, setSaved] = useState<FormState>(() => fromVilla(villa));
   const [f, setF] = useState<FormState>(() => fromVilla(villa));
+
+  // Fiyat kuralları isteğe bağlı: villada tanımlı kural varsa açık başlar.
+  const [showRules, setShowRules] = useState(() =>
+    [
+      villa?.weekendPremiumPercent,
+      villa?.losWeeklyDiscountPercent,
+      villa?.losMonthlyDiscountPercent,
+      villa?.lastMinuteDiscountPercent,
+      villa?.lastMinuteDays,
+      villa?.extraGuestFee,
+      villa?.extraGuestAfter,
+    ].some((v) => v != null && v !== 0)
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const dirty = useMemo(
@@ -324,8 +347,123 @@ export default function VillaForm({
               ))}
             </select>
           </Field>
+          <Field
+            label="Bakanlık belge no"
+            error={errors.ministryCertNo}
+            hint="T.C. Kültür ve Turizm Bakanlığı işletme belgesi (ör. 48-6108). Villa sayfasında rozet olarak görünür. Boş = gösterilmez."
+          >
+            <input
+              className={inputCls}
+              value={f.ministryCertNo}
+              placeholder="48-6108"
+              onChange={(e) => set("ministryCertNo", e.target.value)}
+            />
+          </Field>
         </div>
       </Section>
+
+      <Section
+        title="Fiyatlandırma"
+        description="Sezon fiyatı tanımlıysa o tarihlerde sezon fiyatı geçerlidir; taban fiyat geri kalan günlerde kullanılır."
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Taban gecelik fiyat (₺)" required error={errors.basePrice}>
+            <input type="number" min={0} className={inputCls} value={f.basePrice} onChange={(e) => set("basePrice", e.target.value)} />
+          </Field>
+          <Field
+            label="Temizlik bedeli (₺)"
+            error={errors.cleaningFee}
+            hint="Konaklama başına bir kez eklenir."
+          >
+            <input type="number" min={0} className={inputCls} value={f.cleaningFee} onChange={(e) => set("cleaningFee", e.target.value)} />
+          </Field>
+          <Field
+            label="Hasar depozitosu (₺)"
+            error={errors.damageDeposit}
+            hint="Girişte alınır, sorunsuz çıkışta iade edilir. Boş = gösterilmez."
+          >
+            <input type="number" min={0} className={inputCls} value={f.damageDeposit} onChange={(e) => set("damageDeposit", e.target.value)} />
+          </Field>
+          <Field label="Hizmet oranı" error={errors.serviceRate} hint="Ör. 0.05 = %5">
+            <input type="number" step="0.01" min={0} max={1} className={inputCls} value={f.serviceRate} onChange={(e) => set("serviceRate", e.target.value)} />
+          </Field>
+          <Field label="İndirim %" error={errors.discountPercent} hint="Boş = indirim yok">
+            <input type="number" min={0} max={90} className={inputCls} value={f.discountPercent} onChange={(e) => set("discountPercent", e.target.value)} />
+          </Field>
+          <Field
+            label="Fırsat etiketi"
+            error={errors.dealTag}
+            hint="Villa kartında rozet olarak görünür."
+          >
+            <select className={inputCls} value={f.dealTag} onChange={(e) => set("dealTag", e.target.value)}>
+              {dealTagOptions.map((d) => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        {/* Fiyat kurallarını isteğe bağlı aç */}
+        <label className="mt-4 inline-flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={showRules}
+            onChange={(e) => setShowRules(e.target.checked)}
+            className="h-4 w-4 rounded border-sand-300 text-brand-600"
+          />
+          <span className="text-sm font-semibold text-brand-900">
+            Fiyat kuralı ekle{" "}
+            <span className="font-normal text-brand-900/55">
+              (hafta sonu farkı, uzun konaklama / son dakika indirimi, kapasite üstü kişi)
+            </span>
+          </span>
+        </label>
+      </Section>
+
+      {showRules && (
+      <Section
+        title="Fiyat kuralları"
+        description="Hepsi isteğe bağlı. Boş bırakılan kural uygulanmaz. Taban fiyat üzerinden hesaplanır."
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Hafta sonu farkı (%)"
+              error={errors.weekendPremiumPercent}
+              hint={ruleHint.weekend}
+            >
+              <input type="number" min={0} max={100} className={inputCls} value={f.weekendPremiumPercent} onChange={(e) => set("weekendPremiumPercent", e.target.value)} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Kapasite üstü kişi ücreti (₺/gece)" error={errors.extraGuestFee} hint={ruleHint.extraGuest}>
+                <input type="number" min={0} className={inputCls} value={f.extraGuestFee} onChange={(e) => set("extraGuestFee", e.target.value)} />
+              </Field>
+              <Field label="Şu kişiden sonra" error={errors.extraGuestAfter} hint="Ör. 6">
+                <input type="number" min={1} className={inputCls} value={f.extraGuestAfter} onChange={(e) => set("extraGuestAfter", e.target.value)} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Uzun konaklama: 7+ gece indirimi (%)" error={errors.losWeeklyDiscountPercent} hint={ruleHint.weekly}>
+              <input type="number" min={0} max={90} className={inputCls} value={f.losWeeklyDiscountPercent} onChange={(e) => set("losWeeklyDiscountPercent", e.target.value)} />
+            </Field>
+            <Field label="Uzun konaklama: 28+ gece indirimi (%)" error={errors.losMonthlyDiscountPercent} hint={ruleHint.monthly}>
+              <input type="number" min={0} max={90} className={inputCls} value={f.losMonthlyDiscountPercent} onChange={(e) => set("losMonthlyDiscountPercent", e.target.value)} />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+            <Field label="Son dakika indirimi (%)" error={errors.lastMinuteDiscountPercent} hint={ruleHint.lastMinute}>
+              <input type="number" min={0} max={90} className={inputCls} value={f.lastMinuteDiscountPercent} onChange={(e) => set("lastMinuteDiscountPercent", e.target.value)} />
+            </Field>
+            <Field label="Girişe kaç gün kala" error={errors.lastMinuteDays} hint="Ör. 7">
+              <input type="number" min={1} max={90} className={inputCls} value={f.lastMinuteDays} onChange={(e) => set("lastMinuteDays", e.target.value)} />
+            </Field>
+          </div>
+        </div>
+      </Section>
+      )}
 
       <Section title="Kapasite ve Konaklama">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -368,6 +506,36 @@ export default function VillaForm({
         </div>
       </Section>
 
+      <Section title="Olanaklar">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {amenityOptions.map((a) => (
+            <label key={a.key} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sand-50">
+              <input type="checkbox" checked={f.amenities.includes(a.key)} onChange={() => toggleAmenity(a.key)} className="h-4 w-4 rounded border-sand-300 text-brand-600" />
+              <span className="text-brand-900">{a.label}</span>
+            </label>
+          ))}
+        </div>
+      </Section>
+
+      {f.pool !== "none" && (
+      <Section
+        title="Havuz Bilgileri"
+        description="Havuz ölçüleri (metre). Boş bırakılan alan villa sayfasında gösterilmez."
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Havuz eni (m)" error={errors.poolWidth}>
+            <input type="number" min={0} step="0.1" className={inputCls} value={f.poolWidth} onChange={(e) => set("poolWidth", e.target.value)} />
+          </Field>
+          <Field label="Havuz boyu (m)" error={errors.poolLength}>
+            <input type="number" min={0} step="0.1" className={inputCls} value={f.poolLength} onChange={(e) => set("poolLength", e.target.value)} />
+          </Field>
+          <Field label="Havuz derinliği (m)" error={errors.poolDepth}>
+            <input type="number" min={0} step="0.1" className={inputCls} value={f.poolDepth} onChange={(e) => set("poolDepth", e.target.value)} />
+          </Field>
+        </div>
+      </Section>
+      )}
+
       <Section
         title="Mesafe Cetveli"
         description="Villa sayfasında güven veren pratik bilgiler. Boş bırakılan satır gösterilmez; deniz mesafesi yukarıdaki 'Denize uzaklık' alanından geliyor."
@@ -392,81 +560,29 @@ export default function VillaForm({
       </Section>
 
       <Section
-        title="Fiyatlandırma"
-        description="Sezon fiyatı tanımlıysa o tarihlerde sezon fiyatı geçerlidir; taban fiyat geri kalan günlerde kullanılır."
+        title="Kategoriler"
+        description="Bu villanın ana sayfada ve filtrelerde hangi kategorilerde görüneceğini seçin. (Popüler, Son Dakika gibi otomatik bloklar kurala göre dolar, burada yer almaz.)"
       >
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Taban gecelik fiyat (₺)" required error={errors.basePrice}>
-            <input type="number" min={0} className={inputCls} value={f.basePrice} onChange={(e) => set("basePrice", e.target.value)} />
-          </Field>
-          <Field
-            label="Temizlik bedeli (₺)"
-            error={errors.cleaningFee}
-            hint="Konaklama başına bir kez eklenir."
-          >
-            <input type="number" min={0} className={inputCls} value={f.cleaningFee} onChange={(e) => set("cleaningFee", e.target.value)} />
-          </Field>
-          <Field label="Hizmet oranı" error={errors.serviceRate} hint="Ör. 0.05 = %5">
-            <input type="number" step="0.01" min={0} max={1} className={inputCls} value={f.serviceRate} onChange={(e) => set("serviceRate", e.target.value)} />
-          </Field>
-          <Field label="İndirim %" error={errors.discountPercent} hint="Boş = indirim yok">
-            <input type="number" min={0} max={90} className={inputCls} value={f.discountPercent} onChange={(e) => set("discountPercent", e.target.value)} />
-          </Field>
-          <Field
-            label="Fırsat etiketi"
-            error={errors.dealTag}
-            hint="Villa kartında rozet olarak görünür."
-          >
-            <select className={inputCls} value={f.dealTag} onChange={(e) => set("dealTag", e.target.value)}>
-              {dealTagOptions.map((d) => (
-                <option key={d.value} value={d.value}>{d.label}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      </Section>
-
-      <Section
-        title="Fiyat kuralları"
-        description="Hepsi isteğe bağlı. Boş bırakılan kural uygulanmaz. Taban fiyat üzerinden hesaplanır."
-      >
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Hafta sonu farkı (%)"
-              error={errors.weekendPremiumPercent}
-              hint={ruleHint.weekend}
-            >
-              <input type="number" min={0} max={100} className={inputCls} value={f.weekendPremiumPercent} onChange={(e) => set("weekendPremiumPercent", e.target.value)} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Kapasite üstü kişi ücreti (₺/gece)" error={errors.extraGuestFee} hint={ruleHint.extraGuest}>
-                <input type="number" min={0} className={inputCls} value={f.extraGuestFee} onChange={(e) => set("extraGuestFee", e.target.value)} />
-              </Field>
-              <Field label="Şu kişiden sonra" error={errors.extraGuestAfter} hint="Ör. 6">
-                <input type="number" min={1} className={inputCls} value={f.extraGuestAfter} onChange={(e) => set("extraGuestAfter", e.target.value)} />
-              </Field>
-            </div>
+        {categoryOptions.length === 0 ? (
+          <p className="text-sm text-brand-900/60">Henüz kategori tanımlı değil.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {categoryOptions.map((c) => (
+              <label
+                key={c.id}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sand-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={f.categoryIds.includes(c.id)}
+                  onChange={() => toggleCategory(c.id)}
+                  className="h-4 w-4 rounded border-sand-300 text-brand-600"
+                />
+                <span className="text-brand-900">{c.nameTr}</span>
+              </label>
+            ))}
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Uzun konaklama: 7+ gece indirimi (%)" error={errors.losWeeklyDiscountPercent} hint={ruleHint.weekly}>
-              <input type="number" min={0} max={90} className={inputCls} value={f.losWeeklyDiscountPercent} onChange={(e) => set("losWeeklyDiscountPercent", e.target.value)} />
-            </Field>
-            <Field label="Uzun konaklama: 28+ gece indirimi (%)" error={errors.losMonthlyDiscountPercent} hint={ruleHint.monthly}>
-              <input type="number" min={0} max={90} className={inputCls} value={f.losMonthlyDiscountPercent} onChange={(e) => set("losMonthlyDiscountPercent", e.target.value)} />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-            <Field label="Son dakika indirimi (%)" error={errors.lastMinuteDiscountPercent} hint={ruleHint.lastMinute}>
-              <input type="number" min={0} max={90} className={inputCls} value={f.lastMinuteDiscountPercent} onChange={(e) => set("lastMinuteDiscountPercent", e.target.value)} />
-            </Field>
-            <Field label="Girişe kaç gün kala" error={errors.lastMinuteDays} hint="Ör. 7">
-              <input type="number" min={1} max={90} className={inputCls} value={f.lastMinuteDays} onChange={(e) => set("lastMinuteDays", e.target.value)} />
-            </Field>
-          </div>
-        </div>
+        )}
       </Section>
 
       <Section

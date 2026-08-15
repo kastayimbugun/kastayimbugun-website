@@ -235,6 +235,8 @@ export async function saveSiteSettings(
     footer_config: resolveFooterConfig(d.footerConfig),
     // null → tüm bölgeler; dizi → yalnızca seçilenler (jsonb).
     home_regions: d.homeRegions ?? null,
+    // Ana sayfa bölüm sırası (jsonb). null → varsayılan sıra.
+    home_sections: d.homeSections ?? null,
     watermark_enabled: d.watermarkEnabled,
     watermark_opacity: d.watermarkOpacity,
     watermark_scale: d.watermarkScale,
@@ -243,11 +245,11 @@ export async function saveSiteSettings(
 
   let { error } = await supabase.from("site_settings").upsert(row);
 
-  // Yeni kolonlar (0013/0014/0015/0017) henüz uygulanmadıysa diğer ayarların
+  // Yeni kolonlar (0013/0014/0015/0017/0018) henüz uygulanmadıysa diğer ayarların
   // kaydını engellememek için bu alanlar olmadan tekrar dene.
   if (
     error &&
-    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_link_url|header_config|footer_config|watermark_|home_regions/.test(
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_link_url|header_config|footer_config|watermark_|home_regions|home_sections/.test(
       error.message ?? ""
     )
   ) {
@@ -263,9 +265,10 @@ export async function saveSiteSettings(
       watermark_scale: _ws,
       watermark_position: _wp,
       home_regions: _hr,
+      home_sections: _hs,
       ...rest
     } = row;
-    void [_p, _w, _m, _l, _h, _f, _we, _wo, _ws, _wp, _hr];
+    void [_p, _w, _m, _l, _h, _f, _we, _wo, _ws, _wp, _hr, _hs];
     ({ error } = await supabase.from("site_settings").upsert(rest));
   }
 

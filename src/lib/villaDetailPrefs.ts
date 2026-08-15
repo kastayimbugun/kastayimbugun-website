@@ -29,6 +29,8 @@ export interface VillaDetailPrefs {
   sections: {
     overview: boolean;
     amenities: boolean;
+    poolInfo: boolean;
+    deposit: boolean;
     availability: boolean;
     distances: boolean;
     video: boolean;
@@ -57,6 +59,8 @@ export const DEFAULT_VILLA_DETAIL_PREFS: VillaDetailPrefs = {
   sections: {
     overview: true,
     amenities: true,
+    poolInfo: true,
+    deposit: true,
     availability: true,
     distances: true,
     video: true,
@@ -103,6 +107,8 @@ export function resolveVillaDetailPrefs(raw: unknown): VillaDetailPrefs {
     sections: {
       overview: bool(sections.overview, d.sections.overview),
       amenities: bool(sections.amenities, d.sections.amenities),
+      poolInfo: bool(sections.poolInfo, d.sections.poolInfo),
+      deposit: bool(sections.deposit, d.sections.deposit),
       availability: bool(sections.availability, d.sections.availability),
       distances: bool(sections.distances, d.sections.distances),
       video: bool(sections.video, d.sections.video),

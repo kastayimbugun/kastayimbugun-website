@@ -12,6 +12,7 @@ import {
   type FooterConfig,
 } from "@/lib/headerFooter";
 import { parseHomeRegions } from "@/lib/data/site";
+import { parseHomeSections, type HomeSectionItem } from "@/lib/homeSections";
 
 /** Panelde düzenlenebilen metin alanları — boş olanlar koddaki varsayılana düşer. */
 export interface SiteSettingsText {
@@ -58,6 +59,8 @@ export interface AdminSiteSettings extends SiteSettingsText {
   footerConfig: FooterConfig;
   /** Ana sayfada gösterilecek bölge slug'ları; null → hepsi. */
   homeRegions: string[] | null;
+  /** Ana sayfa bölüm sırası + aç/kapa; null → varsayılan sıra. */
+  homeSections: HomeSectionItem[] | null;
   // Filigran
   watermarkEnabled: boolean;
   watermarkOpacity: number;
@@ -75,7 +78,7 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
        seo_title_tr, seo_title_en, seo_description_tr, seo_description_en,
        confirmation_deposit_note, confirmation_checkin_note`;
 
-  const withoutWatermark = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config, home_regions`;
+  const withoutWatermark = `${base}, villa_detail_prefs, ad_show_web, ad_show_mobile, ad_web_image, ad_mobile_image, ad_link_url, header_config, footer_config, home_regions, home_sections`;
   const extended = `${withoutWatermark}, watermark_enabled, watermark_opacity, watermark_scale, watermark_position`;
 
   let q = await supabase
@@ -91,10 +94,10 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
     q = await supabase.from("site_settings").select(withoutWatermark).maybeSingle();
   }
 
-  // Yeni kolonlar (0013/0014/0016/0017) yoksa diğer ayarları kaybetmemek için minimal dene.
+  // Yeni kolonlar (0013/0014/0016/0017/0018) yoksa diğer ayarları kaybetmemek için minimal dene.
   if (
     q.error &&
-    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config|favicon_image|home_regions/.test(
+    /villa_detail_prefs|ad_show_web|ad_show_mobile|ad_web_image|ad_mobile_image|ad_link_url|header_config|footer_config|favicon_image|home_regions|home_sections/.test(
       q.error.message ?? ""
     )
   ) {
@@ -145,6 +148,7 @@ export async function getAdminSiteSettings(): Promise<AdminSiteSettings> {
     headerConfig: resolveHeaderConfig(r.header_config),
     footerConfig: resolveFooterConfig(r.footer_config),
     homeRegions: parseHomeRegions((r as Record<string, unknown>).home_regions),
+    homeSections: parseHomeSections((r as Record<string, unknown>).home_sections),
     watermarkEnabled: (r.watermark_enabled as unknown) !== false, // default true
     watermarkOpacity: typeof r.watermark_opacity === "number" ? r.watermark_opacity : 0.35,
     watermarkScale: typeof r.watermark_scale === "number" ? r.watermark_scale : 0.45,
