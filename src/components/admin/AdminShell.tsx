@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Inbox,
+  ClipboardList,
   CalendarCheck,
   CalendarRange,
   Home,
@@ -42,6 +43,7 @@ const nav = [
   { href: "/yonetim/sayfalar", label: "Sayfalar", icon: FileText },
   { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin },
   { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags },
+  { href: "/yonetim/villa-basvurulari", label: "Villa Başvuruları", icon: ClipboardList },
   { href: "/yonetim/ayarlar", label: "Site ayarları", icon: Settings },
 ];
 

@@ -295,9 +295,12 @@ export default function HomeClient({
               {t("home.ctaTitle")}
             </h2>
             <p className="mt-3 text-brand-100">{t("home.ctaDesc")}</p>
-            <button className="mt-6 inline-flex items-center gap-2 rounded-full bg-sun-500 px-7 py-3 font-semibold text-white shadow-lg transition hover:bg-sun-600">
+            <Link
+              href="/villa-basvurusu"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-sun-500 px-7 py-3 font-semibold text-white shadow-lg transition hover:bg-sun-600"
+            >
               {t("home.ctaBtn")} <ArrowRight className="h-5 w-5" />
-            </button>
+            </Link>
           </div>
         </div>
       </section>
