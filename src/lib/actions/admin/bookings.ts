@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   updateBookingStatusSchema,
@@ -32,7 +32,7 @@ export type BookingActionResult =
 export async function updateBookingStatus(
   input: unknown
 ): Promise<BookingActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateBookingStatusSchema.safeParse(input);
@@ -80,15 +80,18 @@ export async function updateBookingStatus(
     }
   }
 
-  // Onaydan çıkış: ilgili bloğu kaldır (tarihleri tekrar aç)
+  // Onaydan çıkış: ilgili bloğu kaldır (tarihleri tekrar aç).
+  // Hata yutulursa tarihler kapalı kalır ama panel "iptal edildi" der; o geceler
+  // sessizce satılamaz hale gelir. Silme başarısızsa işlemi hiç ilerletme.
   if (wasConfirmed && !willConfirm && villaId) {
-    await supabase
+    const { error: unblockErr } = await supabase
       .from("villa_blocks")
       .delete()
       .eq("villa_id", villaId)
       .eq("starts_on", booking.check_in)
       .eq("ends_on", booking.check_out)
       .eq("source", "booking");
+    if (unblockErr) return { ok: false, error: "generic" };
   }
 
   // Durumu güncelle. `lost_reason` yalnızca "lost" durumunda dolu kalır —
@@ -133,7 +136,7 @@ export async function updateBookingStatus(
 export async function updateBooking(
   input: unknown
 ): Promise<BookingActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateBookingSchema.safeParse(input);
@@ -161,61 +164,37 @@ export async function updateBooking(
     current.check_in !== d.checkIn ||
     current.check_out !== d.checkOut;
 
-  const oldBlock = {
-    villa_id: current.villa_id as string,
-    starts_on: current.check_in as string,
-    ends_on: current.check_out as string,
-    source: "booking",
-  };
+  // Blok taşıma + kayıt güncellemesi tek transaction (0022_atomic_operations.sql).
+  // Eskiden blok taşınıp kayıt güncellemesi düşebiliyordu: kayıt eski tarihi,
+  // blok yeni tarihi gösteriyor; iptalde blok tarih eşleşmediği için hiç
+  // silinemiyor ve o geceler kalıcı olarak satılamaz hale geliyordu.
+  // Çakışma (23P01) artık tüm işlemi geri alır — elle geri yazmaya gerek yok.
+  const { error } = await supabase.rpc("update_booking_with_block", {
+    p_id: d.id,
+    p_villa_id: d.villaId,
+    p_check_in: d.checkIn,
+    p_check_out: d.checkOut,
+    p_move_block: Boolean(isConfirmed && moved && current.villa_id),
+    p_old_villa_id: current.villa_id,
+    p_old_check_in: current.check_in,
+    p_old_check_out: current.check_out,
+    p_adults: d.adults,
+    p_children: d.children,
+    p_babies: d.babies,
+    p_full_name: d.fullName,
+    p_phone: d.phone,
+    p_email: d.email,
+    p_price_estimate: d.priceEstimate,
+    p_paid_amount: d.paidAmount,
+    p_damage_deposit: d.damageDeposit,
+    p_deposit_note: d.depositNote,
+    p_note: d.note,
+  });
 
-  if (isConfirmed && moved && current.villa_id) {
-    await supabase
-      .from("villa_blocks")
-      .delete()
-      .eq("villa_id", oldBlock.villa_id)
-      .eq("starts_on", oldBlock.starts_on)
-      .eq("ends_on", oldBlock.ends_on)
-      .eq("source", "booking");
-
-    const { error: blockErr } = await supabase.from("villa_blocks").insert({
-      villa_id: d.villaId,
-      starts_on: d.checkIn,
-      ends_on: d.checkOut,
-      source: "booking",
-      note: "Onaylanan rezervasyon (düzenlendi)",
-    });
-
-    if (blockErr) {
-      // Yeni aralık dolu: eski bloğu geri koy, kayıt olduğu gibi kalsın.
-      await supabase
-        .from("villa_blocks")
-        .insert({ ...oldBlock, note: "Onaylanan rezervasyon talebi" });
-      if (blockErr.code === "23P01") return { ok: false, error: "conflict" };
-      return { ok: false, error: "generic" };
-    }
+  if (error) {
+    if (error.code === "23P01") return { ok: false, error: "conflict" };
+    return { ok: false, error: "generic" };
   }
-
-  const { error } = await supabase
-    .from("booking_requests")
-    .update({
-      villa_id: d.villaId,
-      check_in: d.checkIn,
-      check_out: d.checkOut,
-      adults: d.adults,
-      children: d.children,
-      babies: d.babies,
-      full_name: d.fullName,
-      phone: d.phone,
-      email: d.email,
-      price_estimate: d.priceEstimate,
-      paid_amount: d.paidAmount,
-      damage_deposit: d.damageDeposit,
-      deposit_note: d.depositNote,
-      note: d.note,
-    })
-    .eq("id", d.id);
-
-  if (error) return { ok: false, error: "generic" };
 
   revalidatePath("/yonetim/talepler");
   revalidatePath("/yonetim/rezervasyonlar");
@@ -233,7 +212,7 @@ export async function updateBooking(
 export async function addBookingNote(
   input: unknown
 ): Promise<BookingActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = bookingNoteSchema.safeParse(input);
@@ -278,7 +257,7 @@ export async function addBookingNote(
 export async function cancelReservation(
   input: unknown
 ): Promise<BookingActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = cancelReservationSchema.safeParse(input);
@@ -287,8 +266,10 @@ export async function cancelReservation(
 
   const supabase = await supabaseSession();
 
-  // Eşleşen onaylı talebi iptale çevir (varsa)
-  const { data: booking } = await supabase
+  // Eşleşen onaylı talebi iptale çevir (varsa).
+  // Hata yutulursa `booking` null olur, blok yine de silinir ve talep "confirmed"
+  // kalır: takvim boş görünür ama kayıt onaylı durur → çift rezervasyon riski.
+  const { data: booking, error: findErr } = await supabase
     .from("booking_requests")
     .select("id")
     .eq("villa_id", villaId)
@@ -296,12 +277,14 @@ export async function cancelReservation(
     .eq("check_out", endsOn)
     .eq("status", "confirmed")
     .maybeSingle();
+  if (findErr) return { ok: false, error: "generic" };
 
   if (booking) {
-    await supabase
+    const { error: cancelErr } = await supabase
       .from("booking_requests")
       .update({ status: "cancelled" })
       .eq("id", booking.id);
+    if (cancelErr) return { ok: false, error: "generic" };
   }
 
   // Booking bloğunu kaldır (tarihleri aç)
@@ -334,7 +317,7 @@ export async function cancelReservation(
 export async function updateBookingPayment(
   input: unknown
 ): Promise<BookingActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = bookingPaymentSchema.safeParse(input);
@@ -364,7 +347,12 @@ export type ManualBookingResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      error: "auth" | "validation" | "conflict" | "generic";
+      /**
+       * `orphan`: kayıt açıldı, takvim kapatılamadı ve geri alma da tutmadı.
+       * Takvimi kapatmayan onaylı bir rezervasyon kaldı — personelin elle
+       * düzeltmesi gerekir. "conflict" ile karıştırılmamalı.
+       */
+      error: "auth" | "validation" | "conflict" | "generic" | "orphan";
       fields?: Record<string, string>;
     };
 
@@ -380,7 +368,7 @@ export type ManualBookingResult =
 export async function createManualBooking(
   input: unknown
 ): Promise<ManualBookingResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = manualBookingSchema.safeParse(input);
@@ -425,7 +413,18 @@ export async function createManualBooking(
 
   if (blockErr) {
     // Talep zaten yazıldı ama takvim kapatılamadı — yetim kayıt bırakma.
-    await supabase.from("booking_requests").delete().eq("id", row.id);
+    const { error: undoErr } = await supabase
+      .from("booking_requests")
+      .delete()
+      .eq("id", row.id);
+
+    if (undoErr) {
+      // Telafi de tutmadı: takvimi kapatmayan ONAYLI bir kayıt kaldı. Bunu
+      // "tarihler dolu" diye geçiştirmek çift rezervasyona yol açar; personel
+      // kaydı elle bulup düzeltmeli.
+      return { ok: false, error: "orphan" };
+    }
+
     if (blockErr.code === "23P01") return { ok: false, error: "conflict" };
     return { ok: false, error: "generic" };
   }
@@ -451,7 +450,7 @@ export async function createManualBooking(
 export async function deleteBooking(
   input: unknown
 ): Promise<BookingActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("reservations");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteBookingSchema.safeParse(input);

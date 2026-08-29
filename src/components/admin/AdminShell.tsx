@@ -14,13 +14,16 @@ import {
   Tags,
   Settings,
   FileText,
+  Users,
   LogOut,
+  ExternalLink,
   Menu,
   X,
 } from "lucide-react";
 import { signOutAction } from "@/lib/actions/admin/auth";
 import { ToastProvider } from "@/components/admin/ui/Toast";
 import { ConfirmProvider } from "@/components/admin/ui/ConfirmDialog";
+import { can, type ModuleKey } from "@/lib/auth/permissions";
 import type { StaffUser } from "@/lib/auth/staff";
 
 /**
@@ -34,18 +37,39 @@ import type { StaffUser } from "@/lib/auth/staff";
  * (docs/panel-kurallari.md §4).
  */
 
-const nav = [
+/**
+ * `perm`: bu öğeyi görmek için gereken modül izni. Yok → her personele açık
+ * (Panel). "admin" → yalnızca admin (Personel). Diğerleri izin bazlı filtrelenir.
+ */
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  perm?: ModuleKey | "admin";
+};
+
+const nav: NavItem[] = [
   { href: "/yonetim", label: "Panel", icon: LayoutDashboard },
-  { href: "/yonetim/talepler", label: "Talepler", icon: Inbox },
-  { href: "/yonetim/rezervasyonlar", label: "Rezervasyonlar", icon: CalendarCheck },
-  { href: "/yonetim/takvim", label: "Takvim", icon: CalendarRange },
-  { href: "/yonetim/villalar", label: "Villalar", icon: Home },
-  { href: "/yonetim/sayfalar", label: "Sayfalar", icon: FileText },
-  { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin },
-  { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags },
-  { href: "/yonetim/villa-basvurulari", label: "Villa Başvuruları", icon: ClipboardList },
-  { href: "/yonetim/ayarlar", label: "Site ayarları", icon: Settings },
+  { href: "/yonetim/talepler", label: "Talepler", icon: Inbox, perm: "reservations" },
+  { href: "/yonetim/rezervasyonlar", label: "Rezervasyonlar", icon: CalendarCheck, perm: "reservations" },
+  { href: "/yonetim/takvim", label: "Takvim", icon: CalendarRange, perm: "villas" },
+  { href: "/yonetim/villalar", label: "Villalar", icon: Home, perm: "villas" },
+  { href: "/yonetim/sayfalar", label: "Sayfalar", icon: FileText, perm: "pages" },
+  { href: "/yonetim/bolgeler", label: "Bölgeler", icon: MapPin, perm: "regions" },
+  { href: "/yonetim/kategoriler", label: "Kategoriler", icon: Tags, perm: "categories" },
+  { href: "/yonetim/villa-basvurulari", label: "Villa Başvuruları", icon: ClipboardList, perm: "applications" },
+  { href: "/yonetim/personel", label: "Personel", icon: Users, perm: "admin" },
+  { href: "/yonetim/ayarlar", label: "Site ayarları", icon: Settings, perm: "settings" },
 ];
+
+/** Personelin görebileceği nav öğeleri (izin/rol filtresi). */
+function visibleNav(staff: StaffUser): NavItem[] {
+  return nav.filter((item) => {
+    if (!item.perm) return true; // Panel — herkese açık
+    if (item.perm === "admin") return staff.role === "admin";
+    return can(staff, item.perm);
+  });
+}
 
 const roleLabel: Record<StaffUser["role"], string> = {
   admin: "Yönetici",
@@ -59,15 +83,17 @@ function isActive(pathname: string, href: string) {
 }
 
 function NavLinks({
+  staff,
   pathname,
   onNavigate,
 }: {
+  staff: StaffUser;
   pathname: string;
   onNavigate?: () => void;
 }) {
   return (
     <nav className="flex-1 space-y-1 p-3">
-      {nav.map((item) => {
+      {visibleNav(staff).map((item) => {
         const active = isActive(pathname, item.href);
         return (
           <Link
@@ -138,7 +164,7 @@ export default function AdminShell({
               sayfalarda gezinme çıktıya karışmasın. */}
           <aside className="hidden w-60 shrink-0 flex-col border-r border-sand-200 bg-white sm:flex print:hidden">
             <Brand />
-            <NavLinks pathname={pathname} />
+            <NavLinks staff={staff} pathname={pathname} />
           </aside>
 
           {/* Sol menü — mobil çekmece */}
@@ -165,6 +191,7 @@ export default function AdminShell({
                   </button>
                 </div>
                 <NavLinks
+                  staff={staff}
                   pathname={pathname}
                   onNavigate={() => setOpenedAt(null)}
                 />
@@ -194,15 +221,26 @@ export default function AdminShell({
                 </span>
               </div>
 
-              <form action={signOutAction}>
-                <button
-                  type="submit"
+              <div className="flex shrink-0 items-center gap-1">
+                <Link
+                  href="/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-800 transition hover:bg-sand-100 focus-visible:ring-2 focus-visible:ring-brand-300"
                 >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Çıkış</span>
-                </button>
-              </form>
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="hidden sm:inline">Siteye git</span>
+                </Link>
+                <form action={signOutAction}>
+                  <button
+                    type="submit"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-800 transition hover:bg-sand-100 focus-visible:ring-2 focus-visible:ring-brand-300"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span className="hidden sm:inline">Çıkış</span>
+                  </button>
+                </form>
+              </div>
             </header>
 
             <main className="flex-1 p-4 sm:p-6 print:p-0">{children}</main>

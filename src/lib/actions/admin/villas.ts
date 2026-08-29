@@ -1,7 +1,9 @@
 "use server";
 
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
+import { can } from "@/lib/auth/permissions";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   seasonSchema,
@@ -94,7 +96,16 @@ const isMissingVillaExtraCols = (message: string | undefined) =>
   );
 
 export type VillaSaveResult =
-  | { ok: true; id: string }
+  | {
+      ok: true;
+      id: string;
+      /**
+       * İşlem başarılı ama bir yan adım tutmadı (ör. villa oluştu, kategori
+       * bağları yazılamadı). Formu hata durumuna düşürmek yanlış olur — kayıt
+       * gerçekten var — ama sessiz geçmek de yanlış; form bunu uyarı olarak gösterir.
+       */
+      warning?: string;
+    }
   | {
       ok: false;
       error: "auth" | "validation" | "slug" | "generic" | "conflict";
@@ -111,30 +122,23 @@ async function syncVillaCategories(
   supabase: Awaited<ReturnType<typeof supabaseSession>>,
   villaId: string,
   categoryIds: string[]
-) {
-  await supabase.from("villa_categories").delete().eq("villa_id", villaId);
-  if (categoryIds.length === 0) return;
+): Promise<boolean> {
+  // Sil + yaz tek transaction (0022_atomic_operations.sql). Eskiden üç ayrı istek
+  // vardı ve hiçbirinin hatası kontrol edilmiyordu: silme geçip yazma düşerse villa
+  // hiçbir kategoride görünmüyor, panel ise "Kaydedildi." diyordu. Sıra hesabı da
+  // kategori başına ayrı sorgu yerine tek sorguda yapılıyor (N+1 kalktı).
+  const { error } = await supabase.rpc("sync_villa_categories", {
+    p_villa_id: villaId,
+    p_category_ids: categoryIds,
+  });
+  if (error) return false;
 
-  const rows: { villa_id: string; category_id: string; sort_order: number }[] = [];
-  for (const cid of categoryIds) {
-    const { data: last } = await supabase
-      .from("villa_categories")
-      .select("sort_order")
-      .eq("category_id", cid)
-      .order("sort_order", { ascending: false })
-      .limit(1);
-    rows.push({
-      villa_id: villaId,
-      category_id: cid,
-      sort_order: (last?.[0]?.sort_order ?? -1) + 1,
-    });
-  }
-  await supabase.from("villa_categories").insert(rows);
   revalidatePath("/yonetim/kategoriler");
+  return true;
 }
 
 export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateVillaSchema.safeParse(input);
@@ -179,13 +183,15 @@ export async function updateVilla(input: unknown): Promise<VillaSaveResult> {
   // kaydetme girmiş. İkisinde de kullanıcıya söylemek gerekir.
   if (!saved) return { ok: false, error: "conflict" };
 
-  await syncVillaCategories(supabase, id, categoryIds);
+  if (!(await syncVillaCategories(supabase, id, categoryIds))) {
+    return { ok: false, error: "generic" };
+  }
   await revalidateVilla(supabase, id);
   return { ok: true, id };
 }
 
 export async function createVilla(input: unknown): Promise<VillaSaveResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = villaFormSchema.safeParse(input);
@@ -225,16 +231,25 @@ export async function createVilla(input: unknown): Promise<VillaSaveResult> {
     return { ok: false, error: "generic" };
   }
 
-  await syncVillaCategories(supabase, data.id, parsed.data.categoryIds);
+  // Villa satırı oluştu. Kategori bağları yazılamazsa işlemi "başarısız" sayma:
+  // kullanıcı tekrar denerse slug çakışması alır. Villayı bildir, eksiği söyle.
+  const catOk = await syncVillaCategories(supabase, data.id, parsed.data.categoryIds);
   revalidatePath("/yonetim/villalar");
   revalidatePath("/", "layout");
-  return { ok: true, id: data.id };
+  return catOk
+    ? { ok: true, id: data.id }
+    : {
+        ok: true,
+        id: data.id,
+        warning:
+          "Villa oluşturuldu ancak kategori bağları kaydedilemedi. Kategoriler sekmesinden tekrar seçin.",
+      };
 }
 
 // ---- Sezon fiyatları ----
 
 export async function addSeason(input: unknown): Promise<VillaChildResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = seasonSchema.safeParse(input);
@@ -263,7 +278,7 @@ export async function addSeason(input: unknown): Promise<VillaChildResult> {
 }
 
 export async function updateSeason(input: unknown): Promise<VillaChildResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateSeasonSchema.safeParse(input);
@@ -295,7 +310,7 @@ export async function updateSeason(input: unknown): Promise<VillaChildResult> {
 }
 
 export async function deleteSeason(input: unknown): Promise<VillaChildResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteChildSchema.safeParse(input);
@@ -316,7 +331,7 @@ export async function deleteSeason(input: unknown): Promise<VillaChildResult> {
 // ---- Takvim / kapalı tarihler ----
 
 export async function addBlock(input: unknown): Promise<VillaChildResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = blockSchema.safeParse(input);
@@ -348,7 +363,7 @@ export async function addBlock(input: unknown): Promise<VillaChildResult> {
 }
 
 export async function removeBlock(input: unknown): Promise<VillaChildResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteChildSchema.safeParse(input);
@@ -381,8 +396,11 @@ export type VillaDeleteStatus = {
 };
 
 export async function getVillaDeleteStatus(villaId: string): Promise<VillaDeleteStatus> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
+  if (!z.uuid().safeParse(villaId).success) {
+    return { ok: false, error: "not_found" };
+  }
 
   const supabase = await supabaseSession();
 
@@ -402,10 +420,14 @@ export async function getVillaDeleteStatus(villaId: string): Promise<VillaDelete
     .eq("villa_id", villaId);
 
   // Rezervasyon durumları
-  const { data: bookings } = await supabase
+  // Hata halinde 0 gösterme: silme modalı "aktif rezervasyon yok" derse kullanıcı
+  // yanlış bilgiyle onaylar. Sayı okunamıyorsa işlemi hiç başlatma.
+  const { data: bookings, error: bookErr } = await supabase
     .from("booking_requests")
     .select("id, status")
     .eq("villa_id", villaId);
+
+  if (bookErr) return { ok: false, error: "generic" };
 
   const activeBookingsCount = (bookings || []).filter(
     (b) => b.status !== "cancelled"
@@ -435,8 +457,21 @@ export async function deleteVillaCascade(
   villaId: string,
   options?: { cancelActiveBookings?: boolean }
 ): Promise<DeleteVillaResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
+
+  // Bu fonksiyon `booking_requests` satırlarını iptale çevirip `villa_id` bağını
+  // koparıyor — yani REZERVASYON verisine dokunuyor. Yalnızca `villas` izniyle
+  // yapılabilmesi modül izin modelini deliyordu; RLS bilerek modül-bazlı
+  // olmadığı için durduracak ikinci bir savunma da yok (panel-kurallari.md §1).
+  if (options?.cancelActiveBookings && !can(staff, "reservations")) {
+    return { ok: false, error: "auth" };
+  }
+
+  // İstemciden gelen id doğrulanmadan sorgulara giriyordu (ARCHITECTURE.md §3).
+  if (!z.uuid().safeParse(villaId).success) {
+    return { ok: false, error: "not_found" };
+  }
 
   const supabase = await supabaseSession();
 
@@ -450,11 +485,15 @@ export async function deleteVillaCascade(
   if (!villa) return { ok: false, error: "not_found" };
 
   // 2. Aktif rezervasyon kontrolü
-  const { data: activeBookings } = await supabase
+  // Sorgu hata verirse "rezervasyon yok" varsayma — fail-closed davran. Aksi halde
+  // null'a düşen sonuç guard'ı atlar ve onaylı rezervasyonu olan villa sessizce silinir.
+  const { data: activeBookings, error: activeErr } = await supabase
     .from("booking_requests")
     .select("id")
     .eq("villa_id", villaId)
     .neq("status", "cancelled");
+
+  if (activeErr) return { ok: false, error: "generic" };
 
   if (activeBookings && activeBookings.length > 0) {
     if (!options?.cancelActiveBookings) {
@@ -482,26 +521,36 @@ export async function deleteVillaCascade(
     .eq("villa_id", villaId);
 
   // 4. Görselleri Storage ve DB'den temizle
-  const { data: images } = await supabase
+  // `villa_images` tablosunda `url` diye bir sütun YOK, `storage_path` var
+  // (0001_init.sql). Eskiden `.select("url")` çağrılıyordu: PostgREST hata
+  // döndürüyor, hata okunmadığı için `images` null kalıyor ve bu blok tümüyle
+  // atlanıyordu — silinen her villanın fotoğrafları Storage'da yetim kalıyordu.
+  // Desen `deleteImages` (actions/admin/images.ts) ile aynı: yollar DB'den okunur.
+  const { data: images, error: imgErr } = await supabase
     .from("villa_images")
-    .select("url")
+    .select("storage_path")
     .eq("villa_id", villaId);
 
+  if (imgErr) return { ok: false, error: "generic" };
+
   if (images && images.length > 0) {
-    // URL'den storage path'ini ayıkla (e.g. villalar/slug/filename.webp)
-    const storagePaths: string[] = [];
-    images.forEach((img) => {
-      if (img.url) {
-        const parts = img.url.split("/villa-images/");
-        if (parts[1]) storagePaths.push(parts[1]);
-      }
-    });
+    const storagePaths = images
+      .map((img) => img.storage_path as string)
+      .filter((p) => p && !p.startsWith("http"));
 
     if (storagePaths.length > 0) {
-      await supabase.storage.from("villa-images").remove(storagePaths);
+      // Dosyaları önce sil: DB satırı gidince yola bir daha ulaşılamaz.
+      const { error: rmErr } = await supabase.storage
+        .from("villa-images")
+        .remove(storagePaths);
+      if (rmErr) return { ok: false, error: "generic" };
     }
 
-    await supabase.from("villa_images").delete().eq("villa_id", villaId);
+    const { error: delImgErr } = await supabase
+      .from("villa_images")
+      .delete()
+      .eq("villa_id", villaId);
+    if (delImgErr) return { ok: false, error: "generic" };
   }
 
   // 5. Sezon ve Blok kayıtlarını temizle

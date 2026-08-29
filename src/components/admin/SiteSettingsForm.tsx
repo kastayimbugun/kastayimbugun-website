@@ -1140,7 +1140,7 @@ export default function SiteSettingsForm({
         <HeaderEditor value={header} onChange={setHeader} />
       </Section>
       <Section title="Alt bilgi (Footer)">
-        <FooterEditor value={footer} onChange={setFooter} />
+        <FooterEditor value={footer} onChange={setFooter} regions={regions} />
       </Section>
     </div>
   );

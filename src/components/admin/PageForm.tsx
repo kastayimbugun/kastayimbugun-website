@@ -66,6 +66,14 @@ export function PageForm({ initialData }: PageFormProps) {
       .replace(/-+$/, "");
   }
 
+  // Doğrulama hatası hangi sekmedeyse oraya geç ki kullanıcı hatayı görebilsin.
+  const focusErrorTab = (fields: Record<string, string>) => {
+    if (fields.titleEn || fields.contentEn) setActiveTab("en");
+    else if (fields.metaTitleTr || fields.metaTitleEn || fields.metaDescriptionTr || fields.metaDescriptionEn)
+      setActiveTab("seo");
+    else setActiveTab("tr");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -80,14 +88,21 @@ export function PageForm({ initialData }: PageFormProps) {
       if (res.ok) {
         router.push("/yonetim/sayfalar");
         router.refresh();
+      } else if (res.error === "auth") {
+        setErrorMsg("Oturumunuz sona ermiş görünüyor. Lütfen yeniden giriş yapın.");
+      } else if (res.error === "validation" && res.fields) {
+        setFieldErrors(res.fields);
+        focusErrorTab(res.fields);
+        setErrorMsg("Bazı alanlar eksik veya hatalı — işaretli yerlere bakın.");
+      } else if (res.error === "slug") {
+        const fields = res.fields || {
+          slug: "Bu URL uzantısı (slug) zaten kullanılıyor.",
+        };
+        setFieldErrors(fields);
+        focusErrorTab(fields);
+        setErrorMsg("Bu URL uzantısı (slug) başka bir sayfada kullanılıyor.");
       } else {
-        if (res.error === "validation" && res.fields) {
-          setFieldErrors(res.fields);
-        } else if (res.error === "slug") {
-          setFieldErrors(res.fields || { slug: "Bu URL uzantısı (slug) zaten kullanılıyor." });
-        } else {
-          setErrorMsg("Sayfa kaydedilirken bilinmeyen bir hata oluştu.");
-        }
+        setErrorMsg("Sayfa kaydedilirken bilinmeyen bir hata oluştu.");
       }
     } catch {
       setErrorMsg("Bağlantı hatası oluştu.");
@@ -284,16 +299,19 @@ export function PageForm({ initialData }: PageFormProps) {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  İngilizce Sayfa Başlığı (English Title) <span className="text-red-500">*</span>
+                  İngilizce Sayfa Başlığı (English Title)
+                  <span className="ml-1 font-normal text-gray-400">(isteğe bağlı)</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={form.titleEn}
                   onChange={(e) => setForm({ ...form, titleEn: e.target.value })}
                   placeholder="Privacy & Data Protection Policy"
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
                 />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Boş bırakılırsa Türkçe başlık kullanılır.
+                </p>
                 {fieldErrors.titleEn && (
                   <p className="text-xs text-red-600 mt-1">{fieldErrors.titleEn}</p>
                 )}

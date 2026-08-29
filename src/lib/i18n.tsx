@@ -146,6 +146,9 @@ const tr: Dict = {
   "list.sortRating": "Puana Göre",
   "list.filters": "Filtreler",
   "list.clear": "Temizle",
+  "list.titleRegion": "Kiralık Villalar",
+  "list.prevPage": "Önceki",
+  "list.nextPage": "Sonraki",
   "list.noResults": "Aradığınız kriterlere uygun villa bulunamadı.",
   "list.apply": "Uygula",
 
@@ -229,6 +232,10 @@ const tr: Dict = {
   "form.errorGeneric": "Talep gönderilemedi. Lütfen tekrar deneyin.",
   "form.errorDates": "Seçilen tarihler uygun değil.",
   "form.errorValidation": "Lütfen bilgileri kontrol edin.",
+  "form.errorCaptcha":
+    "Güvenlik doğrulaması tamamlanamadı. Sayfayı yenileyip tekrar deneyin.",
+  "form.errorRateLimit":
+    "Çok fazla talep gönderildi. Bir saat sonra tekrar deneyin veya bizi arayın.",
   "form.guestsLabel": "Misafir",
 
   // Teşekkür sayfası
@@ -407,6 +414,9 @@ const en: Dict = {
   "list.sortRating": "By Rating",
   "list.filters": "Filters",
   "list.clear": "Clear",
+  "list.titleRegion": "Holiday Villas",
+  "list.prevPage": "Previous",
+  "list.nextPage": "Next",
   "list.noResults": "No villas match your criteria.",
   "list.apply": "Apply",
 
@@ -490,6 +500,10 @@ const en: Dict = {
   "form.errorGeneric": "Could not send the request. Please try again.",
   "form.errorDates": "The selected dates are not available.",
   "form.errorValidation": "Please check your details.",
+  "form.errorCaptcha":
+    "Security check could not be completed. Please refresh the page and try again.",
+  "form.errorRateLimit":
+    "Too many requests sent. Please try again in an hour or give us a call.",
   "form.guestsLabel": "Guests",
 
   // Thank-you page

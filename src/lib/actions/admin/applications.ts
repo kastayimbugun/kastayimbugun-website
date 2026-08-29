@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   updateApplicationStatusSchema,
@@ -31,7 +31,7 @@ const LIST = "/yonetim/villa-basvurulari";
 export async function updateApplicationStatus(
   input: unknown
 ): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateApplicationStatusSchema.safeParse(input);
@@ -55,7 +55,7 @@ export async function updateApplicationStatus(
 export async function updateApplicationNote(
   input: unknown
 ): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = applicationNoteSchema.safeParse(input);
@@ -80,7 +80,7 @@ export async function updateApplicationNote(
  * fotoğraflar korunur; yalnızca listeden çıkar.
  */
 export async function archiveApplication(input: unknown): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = archiveApplicationSchema.safeParse(input);
@@ -104,7 +104,7 @@ export async function archiveApplication(input: unknown): Promise<ActionResult> 
  * farklı olarak geri alınamaz — PII'yi tümüyle kaldırmak istendiğinde kullanılır.
  */
 export async function deleteApplication(input: unknown): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = archiveApplicationSchema.safeParse(input);
@@ -158,7 +158,7 @@ function isUniqueViolation(err: { code?: string } | null): boolean {
 }
 
 export async function createQuestion(input: unknown): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = createQuestionSchema.safeParse(input);
@@ -207,7 +207,7 @@ export async function createQuestion(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateQuestion(input: unknown): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateQuestionSchema.safeParse(input);
@@ -242,7 +242,7 @@ export async function updateQuestion(input: unknown): Promise<ActionResult> {
 
 /** Soruyu bir sıra yukarı/aşağı taşır (komşuyla sort_order takas eder). */
 export async function reorderQuestion(input: unknown): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = reorderQuestionSchema.safeParse(input);
@@ -280,7 +280,7 @@ export async function reorderQuestion(input: unknown): Promise<ActionResult> {
 export async function toggleQuestionActive(
   input: unknown
 ): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = toggleQuestionSchema.safeParse(input);
@@ -303,7 +303,7 @@ export async function toggleQuestionActive(
  * kalır (etiketsiz görünmez olur) — bu bilinçli; geçmiş bozulmaz.
  */
 export async function deleteQuestion(input: unknown): Promise<ActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("applications");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteQuestionSchema.safeParse(input);

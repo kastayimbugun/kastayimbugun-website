@@ -19,6 +19,21 @@ type Mode = "price" | "availability";
  *
  * Villa seçimi aramalı — 600 villada düz liste kullanılamaz.
  */
+/**
+ * yyyy-mm-dd + 1 gun.
+ *
+ * `villa_blocks` ve `villa_seasons` yari-acik aralik kullanir: [starts_on, ends_on).
+ * Yani "31 Agustos gecesi" dahil olsun isteniyorsa `ends_on` 1 Eylul olmali.
+ * BlockEditor ve MultiCalendar bunu zaten yapiyordu; toplu guncelleme yapmiyordu
+ * ve secilen son gece 40 villada birden ACIK kaliyordu (sezon fiyatinda da son
+ * gece taban fiyata dusuyordu).
+ */
+function addDay(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function BulkUpdatePanel({
   villas,
 }: {
@@ -42,6 +57,15 @@ export default function BulkUpdatePanel({
   const [closeMode, setCloseMode] = useState<"close" | "open">("close");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  /**
+   * Sunucu semasi tek islemde en fazla 200 villa kabul ediyor
+   * (`schemas/adminBulk.ts`). Arayuz bunu bilmedigi icin "hepsini sec" 600 villa
+   * seciyor, sunucu reddediyor ve hata `errors.villaIds`'e yaziliyordu — ama onu
+   * gosteren bir alan olmadigi icin kullanici "isaretli yerlere bakin" mesajini
+   * gorup hicbir isaret bulamiyordu. Sinir artik secim aninda uygulaniyor.
+   */
+  const MAX_BULK = 200;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("tr");
     if (!q) return villas;
@@ -59,7 +83,19 @@ export default function BulkUpdatePanel({
   const selectAllFiltered = () =>
     setSelected((prev) => {
       const next = new Set(prev);
-      filtered.forEach((v) => next.add(v.id));
+      let hitLimit = false;
+      for (const v of filtered) {
+        if (next.size >= MAX_BULK && !next.has(v.id)) {
+          hitLimit = true;
+          break;
+        }
+        next.add(v.id);
+      }
+      if (hitLimit) {
+        toast.error(
+          `Tek seferde en fazla ${MAX_BULK} villa islenebilir — ilk ${MAX_BULK} tanesi secildi.`
+        );
+      }
       return next;
     });
 
@@ -71,6 +107,18 @@ export default function BulkUpdatePanel({
 
     if (villaIds.length === 0) {
       toast.error("En az bir villa seçin.");
+      return;
+    }
+
+    // Tarih bos birakilirsa asagidaki onay metnindeki formatDate("") gecersiz
+    // tarihte RangeError firlatiyor; hata yakalanmadan promise'e dusuyor ve
+    // butona basilmis gibi hicbir sey olmuyordu.
+    if (!from || !to) {
+      toast.error("Başlangıç ve bitiş tarihi seçin.");
+      return;
+    }
+    if (to < from) {
+      toast.error("Bitiş tarihi başlangıçtan önce olamaz.");
       return;
     }
 
@@ -88,7 +136,8 @@ export default function BulkUpdatePanel({
         const res = await bulkSetSeason({
           villaIds,
           from,
-          to,
+          // Kullanicinin sectigi son GECE dahil olmali (yari-acik aralik).
+          to: addDay(to),
           price,
           minNights,
           label,
@@ -125,7 +174,8 @@ export default function BulkUpdatePanel({
       const res = await bulkSetAvailability({
         villaIds,
         from,
-        to,
+        // Kullanicinin sectigi son GECE dahil olmali (yari-acik aralik).
+        to: addDay(to),
         mode: closeMode,
         note,
       });

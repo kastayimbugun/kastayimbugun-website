@@ -23,6 +23,7 @@ import {
   AlignRight,
   RemoveFormatting,
 } from "lucide-react";
+import { sanitizeRichText } from "@/lib/sanitizeHtml";
 
 interface RichTextEditorProps {
   value: string;
@@ -45,11 +46,15 @@ export function RichTextEditor({
   useEffect(() => {
     setHtmlInput(value);
     if (editorRef.current && editorRef.current.innerHTML !== value && viewMode === "visual") {
-      editorRef.current.innerHTML = value;
+      // Ham HTML modunda girilen icerik burada DOM'a giriyor; temizlenmezse
+      // <img onerror=...> gibi yukler editorun icinde calisir.
+      editorRef.current.innerHTML = sanitizeRichText(value);
     }
   }, [value, viewMode]);
 
   const execCommand = (command: string, value: string | undefined = undefined) => {
+    // Komut, editördeki aktif seçime uygulanır; önce odağı garantiye al.
+    editorRef.current?.focus();
     document.execCommand(command, false, value);
     if (editorRef.current) {
       const updated = editorRef.current.innerHTML;
@@ -72,19 +77,33 @@ export function RichTextEditor({
     onChange(val);
   };
 
-  const insertLink = () => {
-    const url = prompt("Bağlantı URL'sini girin (örn: https://...):");
-    if (url) {
-      execCommand("createLink", url);
+  // prompt() editörün odağını ve seçimini bozar; komuttan önce seçili aralığı
+  // yakalayıp geri yükleyerek bağlantı/görselin doğru yere uygulanmasını sağla.
+  const withRestoredSelection = (fn: (url: string) => void, promptMsg: string) => {
+    const sel = window.getSelection();
+    const saved = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+    const url = prompt(promptMsg);
+    if (!url) return;
+    editorRef.current?.focus();
+    if (saved) {
+      const s = window.getSelection();
+      s?.removeAllRanges();
+      s?.addRange(saved);
     }
+    fn(url);
   };
 
-  const insertImage = () => {
-    const url = prompt("Görsel URL'sini girin (örn: https://...):");
-    if (url) {
-      execCommand("insertImage", url);
-    }
-  };
+  const insertLink = () =>
+    withRestoredSelection(
+      (url) => execCommand("createLink", url),
+      "Bağlantı URL'sini girin (örn: https://...):"
+    );
+
+  const insertImage = () =>
+    withRestoredSelection(
+      (url) => execCommand("insertImage", url),
+      "Görsel URL'sini girin (örn: https://...):"
+    );
 
   const insertTable = () => {
     const tableHTML = `
@@ -124,7 +143,12 @@ export function RichTextEditor({
         <div className="flex flex-wrap items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-2 gap-2">
           {/* Sol Araçlar (Görsel mod aktifse göster) */}
           {viewMode === "visual" ? (
-            <div className="flex flex-wrap items-center gap-1">
+            <div
+              className="flex flex-wrap items-center gap-1"
+              // Butona basınca odak editörden kaçmasın; yoksa execCommand aktif
+              // seçime uygulanamaz ve liste/hizalama gibi komutlar çalışmaz.
+              onMouseDown={(e) => e.preventDefault()}
+            >
               <button
                 type="button"
                 onClick={() => execCommand("formatBlock", "<h2>")}
@@ -360,7 +384,13 @@ export function RichTextEditor({
         {viewMode === "preview" && (
           <div
             className="min-h-[320px] p-6 bg-gray-50 border-t prose prose-slate max-w-none text-gray-800"
-            dangerouslySetInnerHTML={{ __html: value || "<p className='text-gray-400 italic'>Henüz içerik girilmedi...</p>" }}
+            dangerouslySetInnerHTML={{
+              // Onizleme de sanitize edilir (ARCHITECTURE.md §5). Yedek metindeki
+              // `className` duz HTML'de gecersizdi; `class` olmali.
+              __html:
+                sanitizeRichText(value) ||
+                "<p class='text-gray-400 italic'>Henüz içerik girilmedi...</p>",
+            }}
           />
         )}
       </div>

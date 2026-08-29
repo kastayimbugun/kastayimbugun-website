@@ -261,15 +261,19 @@ export default function VillaForm({
           : await createVilla(payload);
 
       if (res.ok) {
+        // Kısmi başarı: kayıt var ama bir yan adım tutmadı (ör. kategori bağları).
+        // Başarı mesajının yerine geçsin ki kullanıcı eksiği fark etsin.
+        if (res.warning) toast.error(res.warning);
+
         if (mode === "create") {
-          toast.success("Villa oluşturuldu.");
+          if (!res.warning) toast.success("Villa oluşturuldu.");
           setSaved(payload); // çıkış uyarısı tetiklenmesin
           // Kayıttan sonra doğrudan Görseller sekmesine: fotoğraf yükleme
           // villa oluşturmanın devamı gibi hissedilsin, ayrı bir adım gibi değil.
           router.push(`/yonetim/villalar/${res.id}?sekme=images`);
         } else {
           setSaved(payload);
-          toast.success("Kaydedildi.");
+          if (!res.warning) toast.success("Kaydedildi.");
           router.refresh();
         }
         return;

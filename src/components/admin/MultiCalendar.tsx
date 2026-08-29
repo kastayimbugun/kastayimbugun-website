@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, CalendarX, Loader2, Phone } from "lucide-react";
-import { addBlock, removeBlock } from "@/lib/actions/admin/villas";
+import { addBlock } from "@/lib/actions/admin/villas";
+import { bulkSetAvailability } from "@/lib/actions/admin/bulk";
 import { formatDateShort, formatPrice } from "@/lib/format";
 import { useToast } from "@/components/admin/ui/Toast";
 import { inputCls } from "@/components/admin/ui/styles";
@@ -169,25 +170,23 @@ export default function MultiCalendar({
   };
 
   const openRange = () => {
-    if (!sel) return;
-    const villa = villas.find((v) => v.id === sel.villaId);
-    if (!villa) return;
-    // Aralığa değen elle blokları kaldır.
-    const st = states.get(sel.villaId)!;
-    const ids = new Set<string>();
-    for (const d of selInfo?.range ?? []) {
-      const b = st.blockOf.get(d);
-      if (b?.source === "manual") ids.add(b.id);
-    }
-    if (ids.size === 0) return;
-
+    if (!sel || !selInfo) return;
+    // Seçimle kesişen elle blokları silmek yerine BÖL: aralığın dışına taşan
+    // parçalar korunur (bkz. `open_villa_dates`). Eskiden birkaç günü açmak,
+    // o günlere değen aylık bir tahsis bloğunun tamamını açabiliyordu.
     start(async () => {
-      for (const id of ids) {
-        await removeBlock({ id, villaId: sel.villaId });
-      }
-      toast.success("Tarihler yeniden müsait.");
+      const res = await bulkSetAvailability({
+        villaIds: [sel.villaId],
+        from: sel.start,
+        to: selInfo.endExclusive,
+        mode: "open",
+      });
+
       setSel(null);
       router.refresh();
+
+      if (res.ok) toast.success("Seçili tarihler yeniden müsait.");
+      else toast.error("Tarihler açılamadı. Tekrar deneyin.");
     });
   };
 

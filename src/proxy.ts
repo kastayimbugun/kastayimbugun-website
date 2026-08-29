@@ -18,6 +18,15 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Oturum cerezi JS'e kapali — session.ts'teki gerekce ile ayni.
+      // Proxy oturumu tazelerken cerezi yeniden yazdigi icin ayni secenekleri
+      // BURADA DA vermek gerekir; yoksa tazeleme httpOnly'yi dusuruyor.
+      cookieOptions: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll();

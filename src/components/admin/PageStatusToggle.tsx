@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { togglePageStatusAction } from "@/lib/actions/admin/pages";
+import { useToast } from "@/components/admin/ui/Toast";
 import { CheckCircle, Clock } from "lucide-react";
 
 interface PageStatusToggleProps {
@@ -11,11 +13,27 @@ interface PageStatusToggleProps {
 
 export function PageStatusToggle({ pageId, currentStatus }: PageStatusToggleProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
 
   const handleToggle = () => {
     const nextStatus = currentStatus === "published" ? "draft" : "published";
     startTransition(async () => {
-      await togglePageStatusAction(pageId, nextStatus);
+      // Sonucu okumadan geçme: oturum düşse veya RLS reddetse kullanıcı hiçbir şey
+      // görmez, sayfa taslak kalır ve yayınlandığı sanılır.
+      const res = await togglePageStatusAction(pageId, nextStatus);
+      if (res.ok) {
+        toast.success(
+          nextStatus === "published" ? "Sayfa yayınlandı." : "Sayfa taslağa alındı."
+        );
+        router.refresh();
+      } else {
+        toast.error(
+          res.error === "auth"
+            ? "Oturumunuz sona ermiş görünüyor. Lütfen yeniden giriş yapın."
+            : "Durum değiştirilemedi. Tekrar deneyin."
+        );
+      }
     });
   };
 

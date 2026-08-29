@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { formatPrice, formatDateShort, toISO } from "@/lib/format";
+import { formatPrice, formatDateShort, businessToday } from "@/lib/format";
+import TurnstileWidget from "@/components/TurnstileWidget";
 import { rangeHasConflict } from "@/lib/availability";
 import { calcPrice } from "@/lib/pricing";
 import { createBookingRequest } from "@/lib/actions/booking";
@@ -65,6 +66,7 @@ export default function BookingBox({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const conflict =
@@ -78,9 +80,10 @@ export default function BookingBox({
     checkIn && checkOut && !conflict
       ? calcPrice(villa, checkIn, checkOut, {
           guests: guests.adults + guests.children,
-          // Son dakika indirimi için bugün; istemcide hesaplanır (bu bileşen
-          // zaten "use client", SSR uyuşmazlığı yok).
-          asOf: toISO(new Date()),
+          // Son dakika indirimi için "bugün". Europe/Istanbul'a sabit:
+          // tarayıcının saat dilimi ne olursa olsun sunucuyla aynı günü söyler,
+          // yoksa gece yarısı–03:00 arası gösterilen ve kaydedilen tutar ayrışır.
+          asOf: businessToday(),
         })
       : null;
 
@@ -106,6 +109,9 @@ export default function BookingBox({
         email,
         note,
         lang,
+        // Sunucu üretimde token YOKSA reddeder. Bu alan eklenmeden
+        // TURNSTILE_SECRET_KEY tanımlanırsa tüm gerçek talepler kaybedilir.
+        turnstileToken,
       });
       if (res.ok) {
         router.push("/rezervasyon-talebi/tesekkurler");
@@ -115,7 +121,11 @@ export default function BookingBox({
             ? t("form.errorDates")
             : res.error === "validation"
               ? t("form.errorValidation")
-              : t("form.errorGeneric")
+              : res.error === "captcha"
+                ? t("form.errorCaptcha")
+                : res.error === "rate_limit"
+                  ? t("form.errorRateLimit")
+                  : t("form.errorGeneric")
         );
       }
     });
@@ -271,7 +281,10 @@ export default function BookingBox({
           {t("book.reserve")}
         </button>
       ) : (
-        <div className="mt-4 flex gap-2">
+        <>
+          {/* Site anahtarı tanımlı değilse hiçbir şey render etmez. */}
+          <TurnstileWidget onToken={setTurnstileToken} lang={lang} />
+          <div className="mt-4 flex gap-2">
           <button
             onClick={() => setShowForm(false)}
             disabled={pending}
@@ -291,7 +304,8 @@ export default function BookingBox({
             )}
             {pending ? t("form.submitting") : t("form.submit")}
           </button>
-        </div>
+          </div>
+        </>
       )}
 
       <p className="mt-2 text-center text-xs text-brand-900/50">

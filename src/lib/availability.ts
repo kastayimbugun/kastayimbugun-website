@@ -1,4 +1,4 @@
-import { toISO } from "./format";
+import { businessToday } from "./format";
 
 export type Range = { start: string; end: string };
 
@@ -7,7 +7,9 @@ export function isBooked(iso: string, ranges: Range[]) {
   return ranges.some((r) => iso >= r.start && iso < r.end);
 }
 
-export function isPast(iso: string, today = toISO(new Date())) {
+// Varsayilan "bugun" isletme gunudur (Europe/Istanbul) — sunucu UTC olsa da
+// gecmis gun kontrolu tarayiciyla ayni sonucu vermeli.
+export function isPast(iso: string, today = businessToday()) {
   return iso < today;
 }
 

@@ -7,7 +7,9 @@ import { getVilla } from "@/lib/data/villas";
 import { bookingRequestSchema } from "@/lib/schemas/booking";
 import { calcPrice } from "@/lib/pricing";
 import { rangeHasConflict } from "@/lib/availability";
-import { toISO, nightsBetween } from "@/lib/format";
+import { businessToday, nightsBetween } from "@/lib/format";
+import { verifyTurnstile } from "@/lib/security/turnstile";
+import { allowRequest } from "@/lib/security/rateLimit";
 import { notifyBookingRequest } from "@/lib/email/bookingNotifications";
 
 /**
@@ -22,7 +24,10 @@ import { notifyBookingRequest } from "@/lib/email/bookingNotifications";
 
 export type BookingActionResult =
   | { ok: true; total: number }
-  | { ok: false; error: "validation" | "dates" | "captcha" | "generic" };
+  | {
+      ok: false;
+      error: "validation" | "dates" | "captcha" | "rate_limit" | "generic";
+    };
 
 export async function createBookingRequest(
   input: unknown
@@ -43,6 +48,12 @@ export async function createBookingRequest(
     return { ok: false, error: "captcha" };
   }
 
+  // 2b) Hız sınırı — aynı IP saatte en fazla 8 talep. Turnstile aşılsa bile
+  // otomatik gönderim maliyeti (DB satırı + e-posta) sınırlı kalsın.
+  if (!(await allowRequest("booking", { max: 8, windowMinutes: 60 }))) {
+    return { ok: false, error: "rate_limit" };
+  }
+
   // 3) Villayı DB'den taze çek (yalnızca yayınlanmış villa talep alır)
   const villa = await getVilla(data.villaSlug);
   if (!villa) {
@@ -50,7 +61,9 @@ export async function createBookingRequest(
   }
 
   // 4) Sunucu tarafı müsaitlik/kural kontrolü
-  const today = toISO(new Date());
+  // Vercel UTC çalışıyor; işletme günü Europe/Istanbul. Sabitlenmezse gece
+  // 00:00–03:00 arası sunucu "dün"ü bugün sanar (bkz. format.ts businessToday).
+  const today = businessToday();
   const nights = nightsBetween(data.checkIn, data.checkOut);
   const guestsTotal = data.adults + data.children;
 
@@ -106,7 +119,6 @@ export async function createBookingRequest(
 
   // 7) Bildirimler — yanıtı bloklamaz (`after`, yanıt gönderildikten sonra çalışır).
   // Talep zaten kaydedildi; e-posta gitmese de sonucu değiştirmez.
-  // TODO (Faz 4 sonrası): gerçek hız sınırı (Upstash).
   after(async () => {
     await notifyBookingRequest({
       villaName: villa.name,
@@ -129,29 +141,3 @@ export async function createBookingRequest(
   return { ok: true, total: price.total };
 }
 
-/** Cloudflare Turnstile doğrulaması. Anahtar yoksa geliştirmede atlanır. */
-async function verifyTurnstile(token: string): Promise<boolean> {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) {
-    console.warn(
-      "TURNSTILE_SECRET_KEY tanımlı değil — spam koruması atlanıyor (yalnızca geliştirme)."
-    );
-    return true;
-  }
-  if (!token) return false;
-
-  try {
-    const res = await fetch(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ secret, response: token }),
-      }
-    );
-    const body = (await res.json()) as { success: boolean };
-    return body.success === true;
-  } catch {
-    return false;
-  }
-}

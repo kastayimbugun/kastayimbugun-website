@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   bulkSeasonSchema,
@@ -27,7 +27,7 @@ export type BulkResult =
  * kısmi kesişim belirsizliğe yol açmasın; panel bunu açıkça uyarır.
  */
 export async function bulkSetSeason(input: unknown): Promise<BulkResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = bulkSeasonSchema.safeParse(input);
@@ -37,34 +37,30 @@ export async function bulkSetSeason(input: unknown): Promise<BulkResult> {
   const d = parsed.data;
   const supabase = await supabaseSession();
 
-  // Aralığa değen sezonları temizle: starts_on < to AND ends_on > from
-  const { error: delErr } = await supabase
-    .from("villa_seasons")
-    .delete()
-    .in("villa_id", d.villaIds)
-    .lt("starts_on", d.to)
-    .gt("ends_on", d.from);
-  if (delErr) return { ok: false, error: "generic" };
-
-  const rows = d.villaIds.map((villaId) => ({
-    villa_id: villaId,
-    label_tr: d.label,
-    label_en: d.label,
-    starts_on: d.from,
-    ends_on: d.to,
-    price: d.price,
-    min_nights: d.minNights,
-  }));
-
-  const { error: insErr } = await supabase.from("villa_seasons").insert(rows);
-  if (insErr) return { ok: false, error: "generic" };
+  // Sil + yaz tek transaction (0022_atomic_operations.sql). İki ayrı istekle
+  // yapıldığında araya giren bir hata, seçili villaların o aralıktaki TÜM sezon
+  // fiyatlarını silip yerine yenisini yazmadan bırakabiliyordu — ve kullanıcı
+  // yalnızca "İşlem başarısız" görüyordu.
+  const { data: applied, error: rpcErr } = await supabase.rpc("bulk_set_season", {
+    p_villa_ids: d.villaIds,
+    p_from: d.from,
+    p_to: d.to,
+    p_price: d.price,
+    p_min_nights: d.minNights,
+    p_label: d.label,
+  });
+  if (rpcErr) return { ok: false, error: "generic" };
 
   revalidatePath("/yonetim/takvim");
   for (const id of d.villaIds) revalidatePath(`/yonetim/villalar/${id}`);
   // Villa verisini gösteren tüm herkese açık sayfalar (ana sayfa, liste, detay).
   revalidatePath("/", "layout");
 
-  return { ok: true, applied: d.villaIds.length, skipped: 0 };
+  return {
+    ok: true,
+    applied: typeof applied === "number" ? applied : d.villaIds.length,
+    skipped: 0,
+  };
 }
 
 /**
@@ -78,7 +74,7 @@ export async function bulkSetSeason(input: unknown): Promise<BulkResult> {
 export async function bulkSetAvailability(
   input: unknown
 ): Promise<BulkResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = bulkAvailabilitySchema.safeParse(input);
@@ -89,19 +85,25 @@ export async function bulkSetAvailability(
   const supabase = await supabaseSession();
 
   if (d.mode === "open") {
-    const { error } = await supabase
-      .from("villa_blocks")
-      .delete()
-      .in("villa_id", d.villaIds)
-      .eq("source", "manual")
-      .lt("starts_on", d.to)
-      .gt("ends_on", d.from);
+    // Kesişen blokları silmek yerine BÖL (0022_atomic_operations.sql).
+    // Eskiden aralığa "değen" her elle blok tümüyle siliniyordu: 5–6 Ağustos'u
+    // açmak isteyen personel, 1 Haziran – 30 Eylül'lük bir tahsis bloğunun
+    // tamamını farkında olmadan siteye açıyordu.
+    const { data: affected, error } = await supabase.rpc("open_villa_dates", {
+      p_villa_ids: d.villaIds,
+      p_from: d.from,
+      p_to: d.to,
+    });
     if (error) return { ok: false, error: "generic" };
 
     revalidatePath("/yonetim/takvim");
     for (const id of d.villaIds) revalidatePath(`/yonetim/villalar/${id}`);
     revalidatePath("/", "layout");
-    return { ok: true, applied: d.villaIds.length, skipped: 0 };
+    return {
+      ok: true,
+      applied: typeof affected === "number" ? affected : d.villaIds.length,
+      skipped: 0,
+    };
   }
 
   // Kapatma: villa başına dene, çakışanı atla.

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   regionFormSchema,
@@ -79,7 +79,7 @@ function revalidate() {
 }
 
 export async function createRegion(input: unknown): Promise<RegionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("regions");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = regionFormSchema.safeParse(input);
@@ -109,7 +109,7 @@ export async function createRegion(input: unknown): Promise<RegionResult> {
 }
 
 export async function updateRegion(input: unknown): Promise<RegionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("regions");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateRegionSchema.safeParse(input);
@@ -155,7 +155,7 @@ async function currentHero(
 export async function uploadRegionHero(
   formData: FormData
 ): Promise<RegionImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("regions");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = regionIdSchema.safeParse({ id: formData.get("regionId") });
@@ -189,7 +189,7 @@ export async function uploadRegionHero(
 export async function removeRegionHero(
   input: unknown
 ): Promise<RegionImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("regions");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = regionIdSchema.safeParse(input);
@@ -212,7 +212,7 @@ export async function removeRegionHero(
 export async function updateRegionsTreeOrder(
   items: { id: string; parentId: string | null; depth: number; sortOrder: number }[]
 ): Promise<RegionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("regions");
   if (!staff) return { ok: false, error: "auth" };
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -241,32 +241,8 @@ export async function updateRegionsTreeOrder(
   return { ok: true };
 }
 
-export async function updateRegionsOrder(
-  items: { id: string; sortOrder: number }[]
-): Promise<RegionResult> {
-  const staff = await getStaffUser();
-  if (!staff) return { ok: false, error: "auth" };
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return { ok: true };
-  }
-
-  const supabase = await supabaseSession();
-
-  // Toplu güncelleme
-  for (const item of items) {
-    await supabase
-      .from("regions")
-      .update({ sort_order: item.sortOrder })
-      .eq("id", item.id);
-  }
-
-  revalidate();
-  return { ok: true };
-}
-
 export async function deleteRegion(input: unknown): Promise<RegionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("regions");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteRegionSchema.safeParse(input);

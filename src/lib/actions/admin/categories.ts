@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   categoryFormSchema,
@@ -47,7 +47,7 @@ function revalidate(id?: string) {
 }
 
 export async function createCategory(input: unknown): Promise<CategoryResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = categoryFormSchema.safeParse(input);
@@ -76,7 +76,7 @@ export async function createCategory(input: unknown): Promise<CategoryResult> {
 }
 
 export async function updateCategory(input: unknown): Promise<CategoryResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = updateCategorySchema.safeParse(input);
@@ -105,7 +105,7 @@ export async function updateCategory(input: unknown): Promise<CategoryResult> {
 }
 
 export async function deleteCategory(input: unknown): Promise<CategoryResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteCategorySchema.safeParse(input);
@@ -125,7 +125,7 @@ export async function deleteCategory(input: unknown): Promise<CategoryResult> {
 export async function setCategoryVillas(
   input: unknown
 ): Promise<CategoryResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = setCategoryVillasSchema.safeParse(input);
@@ -133,23 +133,14 @@ export async function setCategoryVillas(
   const { categoryId, villaIds } = parsed.data;
 
   const supabase = await supabaseSession();
-  const { error: delErr } = await supabase
-    .from("villa_categories")
-    .delete()
-    .eq("category_id", categoryId);
-  if (delErr) return { ok: false, error: "generic" };
 
-  if (villaIds.length > 0) {
-    const rows = villaIds.map((villaId, i) => ({
-      category_id: categoryId,
-      villa_id: villaId,
-      sort_order: i,
-    }));
-    const { error: insErr } = await supabase
-      .from("villa_categories")
-      .insert(rows);
-    if (insErr) return { ok: false, error: "generic" };
-  }
+  // Sil + yaz tek transaction (0022_atomic_operations.sql). İki ayrı istekte
+  // silme geçip yazma düşerse kategori tamamen boşalıyordu ve geri alınamıyordu.
+  const { error } = await supabase.rpc("set_category_villas", {
+    p_category_id: categoryId,
+    p_villa_ids: villaIds,
+  });
+  if (error) return { ok: false, error: "generic" };
 
   revalidate(categoryId);
   return { ok: true };
@@ -163,7 +154,7 @@ export async function saveCategoryHomeSettings(
     sortOrder: number;
   }>
 ): Promise<CategoryResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const supabase = await supabaseSession();
@@ -204,7 +195,7 @@ export async function saveCategoryHomeSettings(
 export async function uploadCategoryImage(
   formData: FormData
 ): Promise<CategoryImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const categoryId = String(formData.get("categoryId") ?? "");
@@ -244,7 +235,7 @@ export async function uploadCategoryImage(
 export async function removeCategoryImage(
   input: unknown
 ): Promise<CategoryImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("categories");
   if (!staff) return { ok: false, error: "auth" };
 
   const categoryId = String((input as Record<string, unknown>)?.categoryId ?? "");

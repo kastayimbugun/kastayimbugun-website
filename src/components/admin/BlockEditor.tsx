@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarX, CalendarCheck, Loader2, Lock } from "lucide-react";
 import { addBlock, removeBlock } from "@/lib/actions/admin/villas";
+import { bulkSetAvailability } from "@/lib/actions/admin/bulk";
 import { cancelReservation } from "@/lib/actions/admin/bookings";
 import { formatDateShort } from "@/lib/format";
 import { rangeHasConflict } from "@/lib/availability";
@@ -134,23 +135,28 @@ export default function BlockEditor({
     });
   };
 
-  /** Seçili aralığa değen tüm elle blokları tek seferde açar. */
+  /**
+   * Seçili aralığı açar.
+   *
+   * Blokları TAMAMEN silmek yerine seçimle kesişen kısmı çıkarır: aralığın
+   * dışına taşan parçalar korunur (bkz. `open_villa_dates`). Eskiden 5–6 Ağustos'u
+   * açmak, o günlere değen 4 aylık bir tahsis bloğunun tamamını açıyordu.
+   */
   const openSelected = () => {
-    if (selManualBlocks.length === 0) return;
+    if (selManualBlocks.length === 0 || !checkIn || !endExclusive) return;
     start(async () => {
-      for (const b of selManualBlocks) {
-        const res = await removeBlock({ id: b.id, villaId });
-        if (!res.ok) {
-          toast.error("Bazı tarihler açılamadı.");
-          router.refresh();
-          return;
-        }
+      const res = await bulkSetAvailability({
+        villaIds: [villaId],
+        from: checkIn,
+        to: endExclusive,
+        mode: "open",
+      });
+      if (!res.ok) {
+        toast.error("Tarihler açılamadı.");
+        router.refresh();
+        return;
       }
-      toast.success(
-        selManualBlocks.length > 1
-          ? `${selManualBlocks.length} kapatma açıldı.`
-          : "Tarihler yeniden müsait."
-      );
+      toast.success("Seçili tarihler yeniden müsait.");
       setCheckIn(null);
       setCheckOut(null);
       router.refresh();

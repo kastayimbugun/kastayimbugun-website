@@ -5,6 +5,7 @@ import { getMultiCalendar } from "@/lib/data/admin/calendar";
 import { PageHeader } from "@/components/admin/ui/PageHeader";
 import { btnSecondary } from "@/components/admin/ui/styles";
 import MultiCalendar from "@/components/admin/MultiCalendar";
+import { businessToday } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,8 @@ const WEEKS = 8; // 8 haftalık pencere (yol haritası 3.2)
 
 /** UTC güne göre bugünün ISO'su (takvim gün mantığı saat dilimsiz). */
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // toISOString() UTC gunudur; takvim isletme gunune gore acilmali.
+  return businessToday();
 }
 
 /** Verilen günü içeren haftanın Pazartesi'si — ızgara hafta hizalı başlasın. */

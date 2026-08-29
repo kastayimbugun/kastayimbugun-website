@@ -183,11 +183,8 @@ export default function ImageManager({
 
     setBusyId(img.id);
     start(async () => {
-      const res = await deleteImage({
-        id: img.id,
-        villaId,
-        storagePath: img.storagePath,
-      });
+      // storagePath artık gönderilmiyor: sunucu yolu DB'den okuyor.
+      const res = await deleteImage({ id: img.id, villaId });
       setBusyId(null);
       if (res.ok) toast.success("Görsel silindi.");
       else toast.error(errorText(res));

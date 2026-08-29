@@ -77,8 +77,35 @@ export function toISO(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * İşletmenin "bugün"ü — her zaman Europe/Istanbul.
+ *
+ * `toISO(new Date())` çalıştığı yerin saatine bakar: tarayıcı Türkiye'de,
+ * Vercel UTC'de. Gece 00:00–03:00 arasında ikisi FARKLI gün söyler ve sonuç
+ * doğrudan paraya yansır — ör. son dakika indirimi eşiği istemcide 7 gün
+ * içinde sayılıp sunucuda 8 gün çıkabiliyor; misafir indirimli tutarı görüyor,
+ * kayda ve e-postaya indirimsiz tutar yazılıyordu.
+ *
+ * Bu yüzden "hangi gündeyiz" kararını veren HER yer bunu çağırmalı:
+ * fiyat hesabı (`asOf`), geçmiş tarih kontrolü, dashboard "bugün/bu ay".
+ * Salt gösterim için `formatDate*` zaten Europe/Istanbul'a sabitli.
+ *
+ * `en-CA` yerel biçimi yyyy-mm-dd üretir — ISO tarihiyle birebir aynı.
+ */
+export function businessToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
 export function nightsBetween(start: string, end: string) {
   const a = new Date(start + "T00:00:00").getTime();
   const b = new Date(end + "T00:00:00").getTime();
+  // Geçersiz tarihte NaN dönme: `Math.max(0, NaN)` NaN'dır ve `calcPrice`'taki
+  // `nights <= 0` koruması NaN'ı geçirir — tutar "NaN ₺" olarak hesaplanır.
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
   return Math.max(0, Math.round((b - a) / 86400000));
 }

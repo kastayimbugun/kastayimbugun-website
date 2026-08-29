@@ -8,6 +8,8 @@ import { applicationCoreSchema } from "@/lib/schemas/villaApplication";
 import { processImage } from "@/lib/images/process";
 import { MAX_UPLOAD_BYTES } from "@/lib/images/limits";
 import { notifyVillaApplication } from "@/lib/email/villaApplicationNotifications";
+import { verifyTurnstile } from "@/lib/security/turnstile";
+import { allowRequest } from "@/lib/security/rateLimit";
 
 /**
  * Villa sahibi başvurusu — herkese açık formun tek giriş noktası.
@@ -26,7 +28,13 @@ export type ApplicationActionResult =
   | { ok: true }
   | {
       ok: false;
-      error: "validation" | "photos" | "questions" | "captcha" | "generic";
+      error:
+        | "validation"
+        | "photos"
+        | "questions"
+        | "captcha"
+        | "rate_limit"
+        | "generic";
     };
 
 const MAX_PHOTOS = 15;
@@ -52,6 +60,12 @@ export async function createVillaApplication(
   // 2) Spam koruması (booking ile aynı; anahtar yoksa geliştirmede atlanır)
   if (!(await verifyTurnstile(str(formData, "turnstileToken")))) {
     return { ok: false, error: "captcha" };
+  }
+
+  // 2b) Hız sınırı — başvuru fotoğraf da yüklüyor (istek başına ~9 MB'a kadar),
+  // bu yüzden rezervasyon talebinden daha dar: saatte 3.
+  if (!(await allowRequest("application", { max: 3, windowMinutes: 60 }))) {
+    return { ok: false, error: "rate_limit" };
   }
 
   // 3) Dinamik soruların cevaplarını doğrula/derle
@@ -202,29 +216,3 @@ async function cleanup(
   }
 }
 
-/** Cloudflare Turnstile doğrulaması. Anahtar yoksa geliştirmede atlanır. */
-async function verifyTurnstile(token: string): Promise<boolean> {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) {
-    console.warn(
-      "TURNSTILE_SECRET_KEY tanımlı değil — spam koruması atlanıyor (yalnızca geliştirme)."
-    );
-    return true;
-  }
-  if (!token) return false;
-
-  try {
-    const res = await fetch(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ secret, response: token }),
-      }
-    );
-    const body = (await res.json()) as { success: boolean };
-    return body.success === true;
-  } catch {
-    return false;
-  }
-}

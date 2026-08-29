@@ -7,7 +7,8 @@ export const pageSchema = z.object({
     .max(100, "URL uzantısı en fazla 100 karakter olabilir")
     .regex(/^[a-z0-9-]+$/, "URL uzantısı sadece küçük harf, rakam ve tire (-) içerebilir"),
   titleTr: z.string().min(2, "Türkçe başlık en az 2 karakter olmalıdır"),
-  titleEn: z.string().min(2, "İngilizce başlık en az 2 karakter olmalıdır"),
+  // İngilizce başlık isteğe bağlı — boşsa kayıtta Türkçe başlığa düşülür.
+  titleEn: z.string().optional().default(""),
   contentTr: z.string().optional().default(""),
   contentEn: z.string().optional().default(""),
   metaTitleTr: z.string().optional(),

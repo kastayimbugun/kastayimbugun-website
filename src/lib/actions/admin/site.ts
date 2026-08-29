@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import { storeImage, removeImage, type StoreError } from "@/lib/images/store";
 import { imageUrl } from "@/lib/images/url";
@@ -69,7 +69,7 @@ async function uploadSettingImage(
   file: FormDataEntryValue | null,
   animated = false
 ): Promise<SiteResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("settings");
   if (!staff) return { ok: false, error: "auth" };
 
   const supabase = await supabaseSession();
@@ -92,7 +92,7 @@ async function uploadSettingImage(
 }
 
 async function removeSettingImage(column: ImageColumn): Promise<SiteResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("settings");
   if (!staff) return { ok: false, error: "auth" };
 
   const supabase = await supabaseSession();
@@ -175,7 +175,7 @@ export async function removeAdMobileImage(): Promise<SiteResult> {
 export async function uploadFooterImage(
   formData: FormData
 ): Promise<FooterImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("settings");
   if (!staff) return { ok: false, error: "auth" };
   const supabase = await supabaseSession();
   const stored = await storeImage(supabase, formData.get("file"), "site/footer");
@@ -190,7 +190,7 @@ export async function uploadFooterImage(
 export async function saveSiteSettings(
   input: unknown
 ): Promise<SiteSettingsResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("settings");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = siteSettingsSchema.safeParse(input);

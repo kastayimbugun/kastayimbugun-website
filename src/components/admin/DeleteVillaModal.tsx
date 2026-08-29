@@ -96,6 +96,35 @@ export default function DeleteVillaModal({
             <Loader2 className="h-8 w-8 animate-spin text-brand-600 mb-2" />
             <p className="text-sm font-medium">Villa durumu kontrol ediliyor…</p>
           </div>
+        ) : status && !status.ok ? (
+          /* Durum okunamadıysa sayıları "0" gösterme: kullanıcı "rezervasyon yok"
+             sanıp onaylar. Silmeye hiç izin verme. */
+          <div className="space-y-4">
+            <div className="rounded-xl bg-rose-50 border border-rose-200 p-4">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <h4 className="font-bold text-rose-800 text-sm">
+                    Villa durumu okunamadı
+                  </h4>
+                  <p className="text-rose-900/80 mt-1">
+                    Rezervasyon ve görsel sayıları alınamadığı için silme işlemi
+                    başlatılamıyor. Bağlantınızı kontrol edip tekrar deneyin;
+                    sorun sürerse çıkış yapıp yeniden girin.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-sand-200 px-4 py-2 text-sm font-semibold text-brand-900 transition hover:bg-sand-50"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             {/* AŞAMA 1: Rezervasyon & Veri Durum Kontrolü */}

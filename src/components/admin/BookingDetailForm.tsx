@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateBooking } from "@/lib/actions/admin/bookings";
 import { calcPrice } from "@/lib/pricing";
-import { nightsBetween, formatPrice } from "@/lib/format";
+import { nightsBetween, formatPrice, businessToday } from "@/lib/format";
 import { Field, Section } from "@/components/admin/ui/FormField";
 import SaveBar from "@/components/admin/ui/SaveBar";
 import { useToast } from "@/components/admin/ui/Toast";
@@ -93,14 +93,16 @@ export default function BookingDetailForm({
   const suggested =
     villa && nights > 0
       ? calcPrice(
-          {
-            pricePerNight: villa.pricePerNight,
-            cleaningFee: villa.cleaningFee,
-            serviceRate: villa.serviceRate,
-            seasons: villa.seasons,
-          },
+          // `villa` (VillaPricingOption) fiyat kurallarini da tasiyor; nesneyi
+          // elle daraltmak hafta sonu primi / LOS indirimi / son dakika / kapasite
+          // ustu ucreti sessizce dusuruyordu — panel ile site farkli tutar veriyordu.
+          villa,
           f.checkIn,
-          f.checkOut
+          f.checkOut,
+          {
+            guests: (Number(f.adults) || 0) + (Number(f.children) || 0),
+            asOf: businessToday(),
+          }
         ).total
       : null;
 

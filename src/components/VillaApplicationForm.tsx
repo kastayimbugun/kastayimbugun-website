@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { createVillaApplication } from "@/lib/actions/villaApplication";
+import TurnstileWidget from "@/components/TurnstileWidget";
 import type { ApplicationQuestion } from "@/lib/data/applicationQuestions";
 
 /** İstemci tarafı fotoğraf sıkıştırma: uzun kenar 1600px, JPEG ~0.8.
@@ -76,6 +77,7 @@ export default function VillaApplicationForm({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   const label = (q: ApplicationQuestion) =>
     lang === "tr" ? q.labelTr : q.labelEn;
@@ -144,6 +146,8 @@ export default function VillaApplicationForm({
     fd.set("address", core.address);
     fd.set("description", core.description);
     fd.set("lang", lang);
+    // Sunucu üretimde token yoksa reddeder (lib/security/turnstile.ts).
+    fd.set("turnstileToken", turnstileToken);
     for (const q of questions) {
       fd.set(`answer_${q.qkey}`, answers[q.qkey] ?? "");
     }
@@ -161,9 +165,11 @@ export default function VillaApplicationForm({
               ? t("apply.errQuestions")
               : res.error === "captcha"
                 ? t("apply.errCaptcha")
-                : res.error === "validation"
-                  ? t("apply.errValidation")
-                  : t("apply.errGeneric")
+                : res.error === "rate_limit"
+                  ? t("form.errorRateLimit")
+                  : res.error === "validation"
+                    ? t("apply.errValidation")
+                    : t("apply.errGeneric")
         );
       }
     });
@@ -339,6 +345,11 @@ export default function VillaApplicationForm({
         <p className="text-center text-xs text-brand-900/45">
           {t("apply.consent")}
         </p>
+
+        {/* Site anahtarı tanımlı değilse hiçbir şey render etmez. */}
+        <div className="flex justify-center">
+          <TurnstileWidget onToken={setTurnstileToken} lang={lang} />
+        </div>
 
         <button
           type="button"

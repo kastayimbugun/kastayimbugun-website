@@ -1,6 +1,6 @@
 "use server";
 
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import {
   imageAltSchema,
@@ -18,7 +18,7 @@ export type ImageResult =
 
 /** Görsel yükler (Storage) ve villa_images kaydı oluşturur. FormData: villaId, file. */
 export async function uploadImage(formData: FormData): Promise<ImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const villaId = String(formData.get("villaId") ?? "");
@@ -87,7 +87,7 @@ export async function uploadImage(formData: FormData): Promise<ImageResult> {
  * reddedilir — eksik/fazla id ile sıra bozulmasın.
  */
 export async function reorderImages(input: unknown): Promise<ImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = reorderImagesSchema.safeParse(input);
@@ -127,15 +127,31 @@ export async function reorderImages(input: unknown): Promise<ImageResult> {
 export async function deleteImage(input: {
   id: string;
   villaId: string;
-  storagePath: string;
 }): Promise<ImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = deleteChildSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "validation" };
 
   const supabase = await supabaseSession();
+
+  // Silinecek dosyanın yolunu İSTEMCİDEN ALMA — DB'den oku.
+  // Eskiden `input.storagePath` doğrulanmadan Storage silmesine geçiyordu ve DB
+  // silmesinin 0 satır etkilemesi hata sayılmadığı için akış oraya ulaşıyordu:
+  // yalnızca `villas` izni olan biri `storagePath: "site/logo-….webp"` göndererek
+  // site logosunu, favicon'u, kategori/bölge görsellerini silebiliyordu
+  // (hepsi aynı `villa-images` bucket'ında). `deleteImages` bu deseni zaten
+  // doğru uyguluyordu; burası ondan geride kalmıştı.
+  const { data: row, error: selErr } = await supabase
+    .from("villa_images")
+    .select("storage_path")
+    .eq("id", parsed.data.id)
+    .eq("villa_id", parsed.data.villaId)
+    .maybeSingle();
+  if (selErr) return { ok: false, error: "generic" };
+  if (!row) return { ok: false, error: "validation" };
+
   const { error } = await supabase
     .from("villa_images")
     .delete()
@@ -143,9 +159,9 @@ export async function deleteImage(input: {
     .eq("villa_id", parsed.data.villaId);
   if (error) return { ok: false, error: "generic" };
 
-  // Storage'daki dosyayı da sil (harici URL değilse)
-  if (input.storagePath && !input.storagePath.startsWith("http")) {
-    await supabase.storage.from("villa-images").remove([input.storagePath]);
+  const path = row.storage_path as string | null;
+  if (path && !path.startsWith("http")) {
+    await supabase.storage.from("villa-images").remove([path]);
   }
 
   await revalidateVilla(supabase, parsed.data.villaId);
@@ -161,7 +177,7 @@ export async function deleteImages(input: {
   villaId: string;
   ids: string[];
 }): Promise<ImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
   if (
     !input.villaId ||
@@ -201,7 +217,7 @@ export async function deleteImages(input: {
 }
 
 export async function updateImageAlt(input: unknown): Promise<ImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = imageAltSchema.safeParse(input);
@@ -221,7 +237,7 @@ export async function updateImageAlt(input: unknown): Promise<ImageResult> {
 
 /** Görseli bir sıra yukarı/aşağı taşır (komşuyla sort_order takas eder). */
 export async function reorderImage(input: unknown): Promise<ImageResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("villas");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = reorderImageSchema.safeParse(input);

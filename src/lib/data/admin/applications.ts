@@ -50,12 +50,31 @@ interface Row {
   updated_at: string;
 }
 
-/** Public bucket'taki bir yolu tam URL'e çevirir. */
-export function applicationPhotoUrl(path: string): string {
-  if (!path) return "";
-  if (path.startsWith("http")) return path;
-  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "");
-  return `${base}/storage/v1/object/public/villa-applications/${path}`;
+/**
+ * Başvuru fotoğrafları için İMZALI URL üretir (tek istekte, toplu).
+ *
+ * `villa-applications` bucket'ı 0024 ile gizliye alındı: eskiden public'ti ve
+ * SELECT politikası koşulsuz olduğu için anon anahtarla listelenip toplu
+ * indirilebiliyordu (villa sahibinin iç mekân fotoğrafları, açık adresle aynı
+ * kayıtta). Artık yalnızca `applications` izni olan personel, süreli bir
+ * bağlantı üzerinden görebilir.
+ *
+ * Süre 1 saat: panelde bir başvuruyu incelemeye fazlasıyla yeter, sızan bir
+ * bağlantının ömrü ise sınırlı kalır.
+ */
+async function signedPhotoUrls(
+  supabase: Awaited<ReturnType<typeof supabaseSession>>,
+  paths: string[]
+): Promise<string[]> {
+  const local = paths.filter((p) => p && !p.startsWith("http"));
+  if (local.length === 0) return paths.map((p) => (p?.startsWith("http") ? p : ""));
+  const { data } = await supabase.storage
+    .from("villa-applications")
+    .createSignedUrls(local, 60 * 60);
+  const byPath = new Map((data ?? []).map((d) => [d.path, d.signedUrl ?? ""]));
+  return paths.map((p) =>
+    p?.startsWith("http") ? p : (byPath.get(p) ?? "")
+  );
 }
 
 export interface ApplicationFilters {
@@ -114,25 +133,33 @@ export async function getApplications(
   if (error) throw new Error(`Başvurular okunamadı: ${error.message}`);
 
   const total = count ?? 0;
+  // Kapak görselleri tek toplu istekte imzalanır (satır başına ayrı istek değil).
+  const list = data as unknown as Row[];
+  const covers = await signedPhotoUrls(
+    supabase,
+    list.map((r) => (r.photo_paths ?? [])[0] ?? "")
+  );
+  const rows = list.map((r, i) => {
+    const paths = r.photo_paths ?? [];
+    return {
+      id: r.id,
+      ownerName: r.owner_name,
+      phone: r.phone,
+      email: r.email,
+      villaName: r.villa_name,
+      location: r.location,
+      status: r.status,
+      photoCount: paths.length,
+      coverUrl: paths[0] ? (covers[i] || null) : null,
+      createdAt: r.created_at,
+    };
+  });
+
   return {
     total,
     page,
     pageCount: Math.max(1, Math.ceil(total / APPLICATIONS_PAGE_SIZE)),
-    rows: (data as unknown as Row[]).map((r) => {
-      const paths = r.photo_paths ?? [];
-      return {
-        id: r.id,
-        ownerName: r.owner_name,
-        phone: r.phone,
-        email: r.email,
-        villaName: r.villa_name,
-        location: r.location,
-        status: r.status,
-        photoCount: paths.length,
-        coverUrl: paths[0] ? applicationPhotoUrl(paths[0]) : null,
-        createdAt: r.created_at,
-      };
-    }),
+    rows,
   };
 }
 
@@ -185,6 +212,7 @@ export async function getApplication(
 
   const r = data as unknown as Row;
   const paths = r.photo_paths ?? [];
+  const photoUrls = await signedPhotoUrls(supabase, paths);
   return {
     id: r.id,
     ownerName: r.owner_name,
@@ -195,9 +223,9 @@ export async function getApplication(
     address: r.address,
     description: r.description,
     answers: r.answers ?? {},
-    photoUrls: paths.map(applicationPhotoUrl),
+    photoUrls,
     photoCount: paths.length,
-    coverUrl: paths[0] ? applicationPhotoUrl(paths[0]) : null,
+    coverUrl: photoUrls[0] || null,
     adminNote: r.admin_note,
     status: r.status,
     createdAt: r.created_at,

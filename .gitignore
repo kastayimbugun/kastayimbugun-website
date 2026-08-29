@@ -41,3 +41,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# gecici calisma dosyalari — repoda durmalarinin faydasi yok ve
+# apply_*_migration.js gibi scriptler .env.local'i okuyup service_role ile
+# RLS'i atliyor. Git'ten cikarma: git rm -r --cached scratch
+/scratch/
+
+# Supabase CLI onbellegi
+/supabase/.temp/

@@ -81,10 +81,26 @@ export const bookingNoteSchema = z.object({
  * "Girişte ödenecek ücret" ayrıca saklanmaz; toplam tutardan ödenen tutar
  * çıkarılarak ekranda hesaplanır (sihirli/çift kaynak sayı olmasın diye).
  */
+/**
+ * Para alanı — boş bırakılırsa 0 DEĞİL, hata.
+ *
+ * `z.coerce.number()` boş stringi sessizce 0'a çevirir (`Number("") === 0`).
+ * Personel "Toplam tutar"ı silip pazarlık sonucunu yazmak üzereyken kaydederse
+ * rezervasyon 0 ₺ olarak kaydediliyor, konfirmasyonda "Girişte kalan: 0 ₺"
+ * yazıyordu. Zorunlu yıldızı yalnızca görseldi; `required` özniteliği yoktu.
+ */
+const money = (required: string) =>
+  z
+    .union([z.number(), z.string().trim().min(1, required)])
+    .transform((v) => (typeof v === "number" ? v : Number(v)))
+    .refine((n) => Number.isFinite(n), "Geçerli bir tutar girin")
+    .refine((n) => n >= 0, "Negatif olamaz")
+    .refine((n) => n <= 10_000_000, "Tutar çok büyük");
+
 export const bookingPaymentSchema = z.object({
   id: z.uuid(),
-  paidAmount: z.coerce.number().min(0, "Negatif olamaz").max(10_000_000),
-  damageDeposit: z.coerce.number().min(0, "Negatif olamaz").max(10_000_000),
+  paidAmount: money("Ödenen tutarı girin (yoksa 0 yazın)"),
+  damageDeposit: money("Depozito tutarını girin (yoksa 0 yazın)"),
   depositNote: z
     .string()
     .trim()
@@ -124,9 +140,9 @@ const bookingFields = {
     .union([z.email("Geçerli bir e-posta girin"), z.literal("")])
     .optional()
     .transform((v) => (v ? v : null)),
-  priceEstimate: z.coerce.number().min(0, "Negatif olamaz").max(10_000_000),
-  paidAmount: z.coerce.number().min(0, "Negatif olamaz").max(10_000_000),
-  damageDeposit: z.coerce.number().min(0, "Negatif olamaz").max(10_000_000),
+  priceEstimate: money("Toplam tutarı girin"),
+  paidAmount: money("Ödenen tutarı girin (yoksa 0 yazın)"),
+  damageDeposit: money("Depozito tutarını girin (yoksa 0 yazın)"),
   note: z
     .string()
     .trim()

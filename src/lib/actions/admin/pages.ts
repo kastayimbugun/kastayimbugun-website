@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getStaffUser } from "@/lib/auth/staff";
+import { requirePermission } from "@/lib/auth/staff";
 import { supabaseSession } from "@/lib/supabase/session";
 import { pageSchema, PageSchemaInput } from "@/lib/schemas/pages";
 import { toFieldErrors } from "@/lib/schemas/fieldErrors";
+import { sanitizeRichText } from "@/lib/sanitizeHtml";
 
 export type PageActionResult =
   | { ok: true; id?: string }
@@ -24,9 +25,17 @@ function toRow(data: PageSchemaInput) {
   return {
     slug: data.slug,
     title_tr: data.titleTr,
-    title_en: data.titleEn,
-    content_tr: data.contentTr || "",
-    content_en: data.contentEn || "",
+    // İngilizce başlık boşsa Türkçe başlığa düş (kolon NOT NULL; İngilizce
+    // ziyaretçi de boş başlık görmesin).
+    title_en: data.titleEn?.trim() || data.titleTr,
+    // Kayit aninda temizle. Editorde ham HTML yazma modu var; temizlenmemis
+    // icerik hem panelde (RichTextEditor onizleme/gorsel mod) hem herkese acik
+    // sayfada DOM'a basiliyordu. Yalnizca `pages` izni olan bir editor
+    // `<img src=x onerror=...>` kaydedip, sayfayi acan ADMIN'in tarayicisinda
+    // kendi origin'imizde kod calistirabiliyordu (editor -> admin yetki
+    // yukseltmesi). ARCHITECTURE.md §5.
+    content_tr: sanitizeRichText(data.contentTr),
+    content_en: sanitizeRichText(data.contentEn),
     meta_title_tr: data.metaTitleTr || null,
     meta_title_en: data.metaTitleEn || null,
     meta_description_tr: data.metaDescriptionTr || null,
@@ -38,7 +47,7 @@ function toRow(data: PageSchemaInput) {
 }
 
 export async function createPageAction(input: unknown): Promise<PageActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("pages");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = pageSchema.safeParse(input);
@@ -69,7 +78,7 @@ export async function createPageAction(input: unknown): Promise<PageActionResult
 }
 
 export async function updatePageAction(id: string, input: unknown): Promise<PageActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("pages");
   if (!staff) return { ok: false, error: "auth" };
 
   const parsed = pageSchema.safeParse(input);
@@ -99,7 +108,7 @@ export async function updatePageAction(id: string, input: unknown): Promise<Page
 }
 
 export async function deletePageAction(id: string): Promise<PageActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("pages");
   if (!staff) return { ok: false, error: "auth" };
 
   const supabase = await supabaseSession();
@@ -115,7 +124,7 @@ export async function togglePageStatusAction(
   id: string,
   newStatus: "draft" | "published"
 ): Promise<PageActionResult> {
-  const staff = await getStaffUser();
+  const staff = await requirePermission("pages");
   if (!staff) return { ok: false, error: "auth" };
 
   const supabase = await supabaseSession();

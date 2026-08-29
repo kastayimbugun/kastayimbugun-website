@@ -7,7 +7,7 @@ import { ExternalLink } from "lucide-react";
 import { createManualBooking } from "@/lib/actions/admin/bookings";
 import { calcPrice } from "@/lib/pricing";
 import { rangeHasConflict } from "@/lib/availability";
-import { nightsBetween, formatDateShort } from "@/lib/format";
+import { nightsBetween, formatDateShort, businessToday } from "@/lib/format";
 import AvailabilityCalendar from "@/components/AvailabilityCalendar";
 import { Field, Section } from "@/components/admin/ui/FormField";
 import SaveBar from "@/components/admin/ui/SaveBar";
@@ -62,14 +62,16 @@ export default function ManualBookingForm({
   const suggested =
     villa && nights > 0
       ? calcPrice(
-          {
-            pricePerNight: villa.pricePerNight,
-            cleaningFee: villa.cleaningFee,
-            serviceRate: villa.serviceRate,
-            seasons: villa.seasons,
-          },
+          // `villa` (VillaPricingOption) fiyat kurallarini da tasiyor; nesneyi
+          // elle daraltmak hafta sonu primi / LOS indirimi / son dakika / kapasite
+          // ustu ucreti sessizce dusuruyordu — panel ile site farkli tutar veriyordu.
+          villa,
           f.checkIn,
-          f.checkOut
+          f.checkOut,
+          {
+            guests: (Number(f.adults) || 0) + (Number(f.children) || 0),
+            asOf: businessToday(),
+          }
         ).total
       : null;
 
@@ -133,7 +135,9 @@ export default function ManualBookingForm({
             ? "Oturumunuz sona ermiş. Yeniden giriş yapın."
             : res.error === "conflict"
               ? "Bu tarihler zaten dolu — takvimde çakışma var."
-              : "Oluşturulamadı."
+              : res.error === "orphan"
+                ? "Rezervasyon oluştu ancak takvim kapatılamadı ve geri alınamadı. Rezervasyonlar listesinden bu kaydı bulup iptal edin, sonra tekrar deneyin."
+                : "Oluşturulamadı."
         );
       }
     });

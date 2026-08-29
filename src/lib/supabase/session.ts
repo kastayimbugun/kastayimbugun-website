@@ -21,6 +21,24 @@ export async function supabaseSession() {
   }
 
   return createServerClient(url, key, {
+    /**
+     * Oturum cerezi JS'e KAPALI.
+     *
+     * `@supabase/ssr` varsayilani `httpOnly: false` (constants.js) — yani
+     * `document.cookie` ile okunabiliyordu. docs/panel-kurallari.md §1 "token asla
+     * JavaScript'e acilmaz" diyordu ama kod bunu saglamiyordu: sinirli yetkili bir
+     * personel kendi token'iyla dogrudan PostgREST'e gidip TUM musteri PII'sini
+     * okuyabiliyor, bir XSS de token'i disari tasiyabiliyordu.
+     *
+     * Guvenli: projede `createBrowserClient` hic kullanilmiyor (grep: 0 sonuc),
+     * yani hicbir istemci kodu token'a erismeye calismiyor.
+     */
+    cookieOptions: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();

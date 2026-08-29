@@ -1,4 +1,5 @@
 import "server-only";
+import sanitize from "sanitize-html";
 import { processImage } from "@/lib/images/process";
 import { MAX_UPLOAD_BYTES } from "@/lib/images/limits";
 import { IMAGE_BUCKET } from "@/lib/images/url";
@@ -20,8 +21,39 @@ export type StoreResult =
  *
  * GÜVENLİK: yetkiyi ÇAĞIRAN action doğrular — bu yardımcı kontrol yapmaz.
  */
-/** `<img src>` ile gösterilse bile riskli olabilecek SVG kalıpları. */
-const SVG_DANGER = /<script|<foreignObject|<!ENTITY|\son\w+\s*=|javascript:/i;
+/**
+ * SVG temizleme — BEYAZ liste.
+ *
+ * Onceki hali kara listeydi (`/<script|<foreignObject|<!ENTITY|\son\w+\s*=|javascript:/i`)
+ * ve atlatilabiliyordu: `\son\w+\s*=` deseni oznitelik onunde BOSLUK istedigi
+ * icin `<svg/onload=alert(1)>` filtreden geciyordu; `javascript:` duz metin
+ * arandigi icin `&#106;avascript:` gibi entity kodlamalari yakalanmiyordu;
+ * `<animate>`, `<set attributeName="href">`, `<use href="data:...">` listede hic
+ * yoktu. Yuklenen SVG public bucket'ta duruyor ve ham Storage URL'si tarayicida
+ * acildiginda script CALISIR — yani kendi supabase.co origin'imizde depolanmis XSS.
+ *
+ * Beyaz listede yalnizca cizim etiketleri var; `allowedSchemes: []` ile hicbir
+ * URL semasina izin verilmiyor, boylece `href`/`xlink:href` tumuyle dusuyor.
+ */
+const SVG_SANITIZE: sanitize.IOptions = {
+  allowedTags: [
+    "svg", "g", "path", "circle", "ellipse", "rect", "line", "polyline",
+    "polygon", "defs", "linearGradient", "radialGradient", "stop", "title",
+    "desc", "clipPath", "mask",
+  ],
+  allowedAttributes: {
+    "*": [
+      "d", "fill", "fill-rule", "fill-opacity", "stroke", "stroke-width",
+      "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-opacity",
+      "viewBox", "xmlns", "width", "height", "cx", "cy", "r", "rx", "ry",
+      "x", "y", "x1", "y1", "x2", "y2", "points", "transform", "opacity",
+      "offset", "stop-color", "stop-opacity", "clip-rule", "clip-path",
+      "gradientUnits", "gradientTransform", "id",
+    ],
+  },
+  allowedSchemes: [],
+  parser: { lowerCaseTags: true, lowerCaseAttributeNames: true },
+};
 
 export async function storeImage(
   supabase: SupabaseClient,
@@ -41,12 +73,14 @@ export async function storeImage(
     file.type === "image/svg+xml" ||
     file.name.toLowerCase().endsWith(".svg");
   if (isSvg) {
-    const text = await file.text();
-    if (SVG_DANGER.test(text)) return { ok: false, error: "type" };
+    const raw = await file.text();
+    const clean = sanitize(raw, SVG_SANITIZE);
+    // Temizlikten sonra <svg> kokü kalmadiysa dosya gercek bir vektor degil.
+    if (!clean.includes("<svg")) return { ok: false, error: "type" };
     const path = `${pathBase}-${Date.now().toString(36)}.svg`;
     const { error } = await supabase.storage
       .from(IMAGE_BUCKET)
-      .upload(path, Buffer.from(text, "utf8"), {
+      .upload(path, Buffer.from(clean, "utf8"), {
         contentType: "image/svg+xml",
         upsert: true,
       });
