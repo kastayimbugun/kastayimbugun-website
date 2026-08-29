@@ -105,7 +105,12 @@ export default function Footer({
     // links — autoSource varsa hazır kaynaktan, yoksa elle girilenler
     let links: { label: string; href: string }[];
     if (col.autoSource === "regions") {
-      links = regions.map((r) => {
+      // regionSlugs null ⇒ tüm bölgeler; dizi ⇒ yalnızca seçilenler (bölge sırası korunur).
+      const picked =
+        col.regionSlugs == null
+          ? regions
+          : regions.filter((r) => col.regionSlugs!.includes(r.slug));
+      links = picked.map((r) => {
         const href = r.parentSlug
           ? `/villalar/${r.parentSlug}/${r.slug}`
           : `/villalar/${r.slug}`;

@@ -48,12 +48,24 @@ Vercel'de yayında olan, acentenin kendi yönetebildiği bir rezervasyon sitesin
 | 3 | Görsel/medya hattı (Storage) | 1–2 gün | Faz 1 |
 | 4 | Rezervasyon talebi akışı + gerçek müsaitlik | 2–3 gün | Faz 2 |
 | 5 | Yönetim paneli + auth | 3–5 gün | Faz 1,2 |
-| 6 | SEO, i18n URL yapısı, hukuki sayfalar | 2–3 gün | Faz 2 |
-| 7 | **Yayın** (domain, env, izleme, test) | 1–2 gün | Faz 2,4,6 |
-| 8 | Yayın sonrası (ödeme, yorum, üyelik, blog) | sürekli | Faz 7 |
+| 5.8 | **Veri kaybını durdur + güvenlik sertleştirme** | 4 gün | Faz 5.7 |
+| 5.9 | **Ölçek: 600 villaya hazırlık** | 5 gün | Faz 5.8 |
+| 6 | SEO, hukuki sayfalar, bölge içeriği | 4 gün | Faz 5.9 |
+| 6.5 | **Dönüşüm hunisi** | 5 gün | Faz 5.9 |
+| 7 | **Yayın** (domain, env, izleme, test) | 2 gün | Faz 6, 6.5 |
+| 8 | Yayın sonrası (yorum, i18n URL, a11y, ödeme, blog) | sürekli | Faz 7 |
 
-Kritik yol: **0 → 1 → 2 → 4 → 6 → 7**. Faz 3 ve 5, Faz 2'den sonra paralel gidebilir.
-Minimum yayınlanabilir sürüm (MVP) = Faz 0–4 + 6–7. Faz 5 yoksa villaları geçici olarak Supabase Studio'dan elle girersin.
+Kritik yol: **0 → 1 → 2 → 4 → 5 → 5.8 → 5.9 → 6 → 7**. Faz 3, Faz 2'den sonra paralel gidebilir;
+Faz 6 ile 6.5 birbirine paralel (ikisi de 5.9'a bağlı).
+
+**İki kapı** — 29.08.2026 denetimi sonrası eklendi:
+- **G1 · Göç kapısı** (Faz 5.8 + 5.9): 600 villa aktarılmadan önce kapanmalı. Gerekçe: göç
+  sonrası bu hataların maliyeti katlanıyor (600 villanın fotoğrafı yetim kalır, tek tıkla
+  200 villanın fiyatı silinir, sayfa mobilde açılmaz).
+- **G2 · Yayın kapısı** (Faz 6 + 6.5): gerçek alan adına çıkmadan önce kapanmalı.
+
+Minimum yayınlanabilir sürüm (MVP) = Faz 0–5.9 + 6–7. Faz 6.5 teknik olarak MVP dışı ama
+dönüşüm etkisi en yüksek faz; tek kişilik ekipte Faz 6'dan önce yapılması önerilir.
 
 ---
 
@@ -405,12 +417,53 @@ olarak gerekçelendirilmiş durumda.
 
 ---
 
-## FAZ 6 — SEO, dil yapısı, içerik ve hukuki sayfalar
+## FAZ 5.8 / 5.9 / 6.5 — 29.08.2026 denetimi
+
+**Tam kapsam denetimi (29.08.2026).** On alan incelendi: güvenlik, veritabanı/RLS, para-tarih
+doğruluğu, panel doğruluğu, dönüşüm hunisi, SEO, performans, erişilebilirlik, panel deneyimi,
+kod sağlığı. **86 bulgu**, 9'u yayın engeli.
+
+Fazlara bölünmüş hali: **[docs/denetim-yol-haritasi.md](docs/denetim-yol-haritasi.md)**.
+(Faz 5.6/5.7 için `docs/panel-yol-haritasi.md` ne işi gördüyse, bu doküman da onu görür.)
+
+**Kısaca:**
+- **Faz 5.8** (4 gün) — veri kaybettiren hatalar + güvenlik sertleştirme. Göçü değil
+  **bugünü** korur: villa silindiğinde fotoğraflar Storage'da kalıyor, onaylı rezervasyonu
+  olan villa uyarısız silinebiliyor, toplu sezon fiyatı geri alınamıyor, spam koruması fiilen
+  kapalı ve hiçbir güvenlik başlığı yok.
+- **Faz 5.9** (5 gün) — ölçek. `PLAN.md` 6 villa ölçeğinde yazıldı; hedef 600.
+  Ölçüldü: `/villalar` 21 villayla **736 KB HTML**, villa detayı 600 villa çekip 3'ünü
+  kullanıyor. 600 villada build ~4,9 GB.
+- **Faz 6.5** (5 gün) — dönüşüm hunisi. `PLAN.md`'de hiç yoktu. Ölçüldü: mobilde rezervasyon
+  butonu **5,2 ekran aşağıda**, arama çubuğuna girilen tarih hiçbir yerde okunmuyor.
+
+**Durum:** Faz **5.8 ✅ TAMAM** · Faz **5.9 ✅ TAMAM** (29.08.2026) — yani **G1 göç
+kapısının kod tarafı kapandı**. Faz 6 ve 6.5 ⬜ başlanmadı.
+
+**Yeni migration'lar — production'da çalıştırılmalı:** `0022_atomic_operations` ·
+`0023_rate_limits` · `0024_module_rls_and_private_photos` · `0025_scale_indexes_and_constraints`
+(ayrıca Faz 5.7'den açık kalan `0008_price_rules`).
+
+---
+
+## FAZ 6 — SEO, içerik ve hukuki sayfalar
 
 **Amaç:** Google'da bulunur olmak ve yasal olarak yayına uygun olmak.
 
+> **Sıra değişikliği (29.08.2026 denetimi).** i18n URL migrasyonu bu fazın 1. maddesiydi;
+> **Faz 8'e taşındı.** Gerekçe: migrasyon tüm public ağacı dokunan 3–4 günlük bir iş, oysa
+> **Türkçe içerik bile şu an indekslenmiyor** — `sitemap.xml`, `robots.txt`, canonical, OG
+> ve JSON-LD hiç yok; bölge sayfalarının hiçbirinde metadata yok. i18n önce yapılırsa büyük
+> bir refactor riski hiçbir ölçülebilir kazanç görülmeden alınmış olur. Önce indeksleme
+> altyapısı, TR trafiği gelsin, sonra EN.
+>
+> **Madde 5 düzeltmesi:** `AggregateRating` bu fazdan **çıkarıldı**. `rating`/`reviewCount`
+> panelden elle giriliyor ve `reviews` tablosu hiç okunmuyor; bu veriyi işaretlemek Google'ın
+> spam politikasını ihlal eder ve manuel işlem riski taşır. Gerçek yorum sistemi (Faz 8)
+> geldikten sonra açılacak.
+
 **İşler**
-1. **URL tabanlı dil**: `/tr/...` ve `/en/...` (`app/[locale]/...`). `<html lang>` dinamik, `hreflang` + `canonical` etiketleri, dil değiştirici aynı sayfanın diğer diline gitsin. localStorage yaklaşımı kalkar.
+1. ~~**URL tabanlı dil**~~ → **Faz 8'e taşındı.**
 2. Slug'lar Türkçe ve okunur: `/tr/villa/villa-deniz-kalkan`, `/en/villa/villa-deniz-kalkan`.
 3. `app/sitemap.ts` (villalar + bölgeler + kategoriler, iki dil), `app/robots.ts`.
 4. Metadata: her villa için başlık/açıklama, `opengraph-image` (dinamik OG görseli), sosyal paylaşım kartı.

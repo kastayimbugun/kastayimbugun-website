@@ -1,30 +1,14 @@
-import { Suspense } from "react";
-import VillaListClient from "@/components/VillaListClient";
-import { getVillas, getRegions } from "@/lib/data/villas";
-import { getCategories } from "@/lib/data/categories";
+import VillaListPage from "@/components/VillaListPage";
 
 export const revalidate = 300;
 
 export default async function CityPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ city: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { city } = await params;
-  const [villas, regions, categories] = await Promise.all([
-    getVillas(),
-    getRegions(),
-    getCategories(),
-  ]);
-
-  return (
-    <Suspense fallback={<div className="min-h-[60vh]" />}>
-      <VillaListClient
-        villas={villas}
-        regions={regions}
-        categories={categories}
-        initialCitySlug={city}
-      />
-    </Suspense>
-  );
+  return <VillaListPage searchParams={searchParams} regionSlug={city} />;
 }

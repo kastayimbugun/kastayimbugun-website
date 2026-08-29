@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CustomPage } from "@/lib/types";
@@ -38,20 +39,38 @@ export async function getPageBySlug(slug: string): Promise<CustomPage | null> {
 }
 
 /**
- * Alt bilgi (Footer) menüsünde gösterilecek yayınlanmış sayfaları getirir.
+ * Alt bilgi (Footer) menüsünde gösterilecek yayınlanmış sayfalar.
+ *
+ * Yalnızca bağlantı için gereken üç sütun çekilir. `select("*")` zamanı
+ * `content_tr`/`content_en` (tam HTML gövdeler) da geliyordu ve Footer her
+ * sayfada render edildiği için, footer'a bir "Kiralama Koşulları" sayfası
+ * eklendiği an o yasal metnin tamamı **sitedeki her sayfanın** RSC payload'ına
+ * giriyordu. Bugün hiçbir sayfa footer'da işaretli olmadığı için sorun
+ * görünmüyordu — bekleyen bir payload bombasıydı.
  */
-export async function getFooterPages(): Promise<CustomPage[]> {
+/** Footer bağlantısı için gereken minimum alanlar. */
+export interface FooterPageLink {
+  slug: string;
+  titleTr: string;
+  titleEn: string;
+}
+
+export const getFooterPages = cache(async (): Promise<FooterPageLink[]> => {
   const { data, error } = await supabaseServer()
     .from("pages")
-    .select("*")
+    .select("slug, title_tr, title_en")
     .eq("status", "published")
     .eq("show_in_footer", true)
     .order("sort_order", { ascending: true })
     .order("title_tr", { ascending: true });
 
   if (error || !data) return [];
-  return data.map(mapPage);
-}
+  return data.map((r) => ({
+    slug: r.slug as string,
+    titleTr: r.title_tr as string,
+    titleEn: r.title_en as string,
+  }));
+})
 
 /**
  * Statik sayfa üretimi için tüm yayınlanmış slug'ları getirir.

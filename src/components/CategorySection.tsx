@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import type { Villa } from "@/lib/types";
 import type { Category } from "@/lib/data/categories";
+import type { VillaCardData } from "@/lib/data/villas";
 
 export default function CategorySection({
   category,
@@ -16,7 +17,7 @@ export default function CategorySection({
 }: {
   category: Category;
   /** Sunucudan gelen villa listesi — kategori slug'ları buradan çözülür */
-  allVillas: Villa[];
+  allVillas: VillaCardData[];
   tinted?: boolean;
 }) {
   const { t, lang } = useI18n();

@@ -3,6 +3,8 @@ import { supabaseSession } from "@/lib/supabase/session";
 import { safeTerm } from "./searchTerm";
 import { villaQuality } from "@/lib/villaQuality";
 import type { AmenityKey, PoolType } from "@/lib/types";
+import type { PriceRules } from "@/lib/pricing";
+import { businessToday } from "@/lib/format";
 import { imageUrl } from "@/lib/images/url";
 
 export type VillaStatus = "draft" | "published" | "archived";
@@ -27,7 +29,15 @@ export async function getVillaOptions(): Promise<VillaOption[]> {
   return data as VillaOption[];
 }
 
-export interface VillaPricingOption {
+/**
+ * `calcPrice`'in ihtiyac duydugu HER sey — fiyat kurallari dahil (PriceRules).
+ * Kurallar eskiden bu tipte ve sorguda yoktu: panel formlari `calcPrice`'i eksik
+ * nesneyle cagiriyor, `pct()` tanimsizi 0'a cevirdigi icin hafta sonu primi,
+ * 7+/28+ gece indirimi, son dakika indirimi ve kapasite ustu ucret SESSIZCE
+ * uygulanmiyordu. Site tarafi bunlari uyguladigi icin ayni konaklama icin panel
+ * ve site farkli tutar veriyordu.
+ */
+export interface VillaPricingOption extends PriceRules {
   id: string;
   name: string;
   regionName: string;
@@ -57,12 +67,21 @@ export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
     .from("villas")
     .select(
       `id, name, capacity, min_nights, base_price, cleaning_fee, service_rate,
+       weekend_premium_percent, los_weekly_discount_percent,
+       los_monthly_discount_percent, last_minute_discount_percent,
+       last_minute_days, extra_guest_fee, extra_guest_after,
        regions ( name ),
        villa_seasons ( starts_on, ends_on, price ),
        villa_blocks ( starts_on, ends_on, source, note ),
        booking_requests ( full_name, check_in, check_out, status )`
     )
     .neq("status", "archived")
+    // Gömülü rezervasyonları daralt: yalnızca ONAYLI ve BUGÜNDEN SONRA biten
+    // kayıtlar. Eskiden her villanın TÜM rezervasyon geçmişi (misafir adlarıyla)
+    // tarayıcıya iniyordu — yıllar geçtikçe sınırsız büyüyen bir PII yüküydü ve
+    // takvimde yalnızca gelecekteki dolu günler için ada ihtiyaç var.
+    .eq("booking_requests.status", "confirmed")
+    .gte("booking_requests.check_out", businessToday())
     .order("name");
   if (error) throw new Error(`Villalar okunamadı: ${error.message}`);
 
@@ -75,6 +94,13 @@ export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
       base_price: number;
       cleaning_fee: number;
       service_rate: number;
+      weekend_premium_percent: number | null;
+      los_weekly_discount_percent: number | null;
+      los_monthly_discount_percent: number | null;
+      last_minute_discount_percent: number | null;
+      last_minute_days: number | null;
+      extra_guest_fee: number | null;
+      extra_guest_after: number | null;
       regions: { name: string } | null;
       villa_seasons: { starts_on: string; ends_on: string; price: number }[];
       villa_blocks: {
@@ -101,6 +127,13 @@ export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
       pricePerNight: Number(v.base_price),
       cleaningFee: Number(v.cleaning_fee ?? 0),
       serviceRate: Number(v.service_rate ?? 0.05),
+      weekendPremiumPercent: v.weekend_premium_percent,
+      losWeeklyDiscountPercent: v.los_weekly_discount_percent,
+      losMonthlyDiscountPercent: v.los_monthly_discount_percent,
+      lastMinuteDiscountPercent: v.last_minute_discount_percent,
+      lastMinuteDays: v.last_minute_days,
+      extraGuestFee: v.extra_guest_fee,
+      extraGuestAfter: v.extra_guest_after,
       seasons: v.villa_seasons.map((s) => ({
         start: s.starts_on,
         end: s.ends_on,

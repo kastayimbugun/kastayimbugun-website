@@ -7,7 +7,7 @@ import { getSiteSettings } from "@/lib/data/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"], // ğ ş İ Ğ Ş latin-ext altkümesinde,
 });
 
 export async function generateMetadata(): Promise<Metadata> {

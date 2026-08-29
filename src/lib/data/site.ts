@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { imageUrl } from "@/lib/images/url";
@@ -104,7 +105,7 @@ const EMPTY: SiteSettings = {
   homeSections: null,
 };
 
-export async function getSiteSettings(): Promise<SiteSettings> {
+export const getSiteSettings = cache(async (): Promise<SiteSettings> => {
   const base = `hero_image, hero_video_url, logo_image, favicon_image, og_image,
        brand_name, agency_name, tursab_no,
        phone, whatsapp, email, address, instagram_url, facebook_url,
@@ -168,4 +169,4 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     homeRegions: parseHomeRegions((r as Record<string, unknown>).home_regions),
     homeSections: parseHomeSections((r as Record<string, unknown>).home_sections),
   };
-}
+})

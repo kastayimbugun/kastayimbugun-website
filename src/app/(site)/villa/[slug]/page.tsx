@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import VillaDetailClient from "@/components/VillaDetailClient";
-import { getVilla, getVillas, getVillaSlugs } from "@/lib/data/villas";
+import {
+  getVilla,
+  getVillaSlugs,
+  getSimilarVillas,
+  getVillasBySlugs,
+} from "@/lib/data/villas";
 import { getSiteSettings } from "@/lib/data/site";
 import { getCategories } from "@/lib/data/categories";
 import type { Villa } from "@/lib/types";
@@ -35,11 +40,7 @@ export default async function VillaPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [villa, all, site] = await Promise.all([
-    getVilla(slug),
-    getVillas(),
-    getSiteSettings(),
-  ]);
+  const [villa, site] = await Promise.all([getVilla(slug), getSiteSettings()]);
   if (!villa) notFound();
 
   const prefs = site.villaDetailPrefs;
@@ -51,17 +52,25 @@ export default async function VillaPage({
     const cats = await getCategories();
     const cat = cats.find((c) => c.slug === prefs.similar.categorySlug);
     if (cat) {
-      const bySlug = new Map(all.map((v) => [v.slug, v]));
-      categoryVillas = cat.villaSlugs
-        .map((s) => bySlug.get(s))
-        .filter((v): v is Villa => Boolean(v));
+      categoryVillas = await getVillasBySlugs(
+        cat.villaSlugs.filter((s) => s !== slug),
+        3
+      );
     }
   }
+
+  // Kategori modu değilse benzer villalar SQL'de 3'e daraltılır.
+  // Eskiden burada `getVillas()` ile 600 villanın TAMAMI çekilip istemciye
+  // prop'lanıyor, 3 tanesi kullanılıyordu.
+  const similar =
+    prefs.similar.mode === "category"
+      ? []
+      : await getSimilarVillas(slug, villa.region, 3);
 
   return (
     <VillaDetailClient
       villa={villa}
-      otherVillas={all}
+      otherVillas={similar}
       prefs={prefs}
       categoryVillas={categoryVillas}
     />

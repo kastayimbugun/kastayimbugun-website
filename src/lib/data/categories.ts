@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -115,7 +116,7 @@ function autoSlugs(
   return [...new Set(ordered)].slice(0, limit);
 }
 
-export async function getCategories(): Promise<Category[]> {
+export const getCategories = cache(async (): Promise<Category[]> => {
   const supabase = supabaseServer();
   const fullSelect = `slug, name_tr, name_en, desc_tr, desc_en, color, image, icon, featured_on_home, show_in_browser, auto_rule, auto_limit,
        villa_categories ( sort_order, villas ( slug, status ) )`;
@@ -173,4 +174,4 @@ export async function getCategories(): Promise<Category[]> {
       villaSlugs,
     };
   });
-}
+})

@@ -202,9 +202,324 @@ export async function getVillaSlugs(): Promise<string[]> {
   return data.map((v) => v.slug);
 }
 
-export async function getFeatured(): Promise<Villa[]> {
-  const villas = await getVillas();
-  return villas.filter((v) => v.featured);
+/**
+ * Villa detayındaki "Benzer Villalar" — SQL'de 3'e daraltılır.
+ *
+ * Eskiden detay sayfası `getVillas()` ile 600 villanın tamamını çekiyor ve
+ * hepsini istemci bileşenine prop'luyordu; kullanılan **3 taneydi**. Ölçülen
+ * maliyet villa başına 14,3 KB → sayfa başına ~8,4 MB ve build'de 600 sayfa ×
+ * aynı yük (~4,9 GB). Bu fonksiyon o yükü ~120 KB'ye indirir.
+ *
+ * Önce aynı bölgedekiler, yetmezse diğerleri — istemcideki eski sıralamanın aynısı.
+ */
+export async function getSimilarVillas(
+  slug: string,
+  regionName: string,
+  limit = 3
+): Promise<Villa[]> {
+  const run = (fields: string, sameRegion: boolean, take: number) => {
+    let q = supabaseServer()
+      .from("villas")
+      .select(fields)
+      .eq("status", "published")
+      .neq("slug", slug);
+    q = sameRegion
+      ? q.eq("regions.name", regionName)
+      : q.not("regions.name", "eq", regionName);
+    return q.order("featured", { ascending: false }).order("name").limit(take);
+  };
+
+  const collect = async (sameRegion: boolean, take: number) => {
+    let res = await run(VILLA_FIELDS, sameRegion, take);
+    if (res.error && isMissingExtraColumns(res.error.message)) {
+      res = await run(VILLA_FIELDS_BASE, sameRegion, take);
+    }
+    if (res.error) return [];
+    return (res.data as unknown as VillaRow[]).map(mapVilla);
+  };
+
+  const same = await collect(true, limit);
+  if (same.length >= limit) return same.slice(0, limit);
+
+  const others = await collect(false, limit - same.length);
+  return [...same, ...others].slice(0, limit);
+}
+
+/**
+ * Verilen slug'lara göre villa çeker (sıra korunur).
+ *
+ * "Benzer Villalar" kategori modunda kullanılır: eskiden tüm katalog çekilip
+ * `Map`'e alınıyordu; artık yalnızca gereken kaç villa varsa o çekiliyor.
+ */
+export async function getVillasBySlugs(
+  slugs: string[],
+  limit = 3
+): Promise<Villa[]> {
+  const wanted = slugs.slice(0, Math.max(limit, 0));
+  if (wanted.length === 0) return [];
+
+  const run = (fields: string) =>
+    supabaseServer()
+      .from("villas")
+      .select(fields)
+      .eq("status", "published")
+      .in("slug", wanted);
+
+  let res = await run(VILLA_FIELDS);
+  if (res.error && isMissingExtraColumns(res.error.message)) {
+    res = await run(VILLA_FIELDS_BASE);
+  }
+  if (res.error) return [];
+
+  const bySlug = new Map(
+    (res.data as unknown as VillaRow[]).map((r) => [r.slug, mapVilla(r)])
+  );
+  // Kategorideki sırayı koru.
+  return wanted
+    .map((sl) => bySlug.get(sl))
+    .filter((v): v is Villa => Boolean(v));
+}
+
+/**
+ * Villa KARTI için gereken alanlar — tam `Villa` değil.
+ *
+ * Kart, tam villa nesnesinin yaklaşık %6'sını kullanıyor: açıklamalar (iki dilde),
+ * dolu tarih blokları, sezon etiket/tarihleri, fiyat kuralları, video, giriş-çıkış
+ * saatleri hiç okunmuyor. Ölçülen maliyet villa başına **14,3 KB**; bu dar tiple
+ * ~0,9 KB'ye iniyor.
+ *
+ * `Villa` bu şekli yapısal olarak karşılar, bu yüzden `VillaCard` hem tam villa
+ * hem kart verisi alabilir — mevcut çağrı yerleri değişmeden çalışır.
+ */
+export interface VillaCardData {
+  slug: string;
+  name: string;
+  code?: string;
+  region: string;
+  province: string;
+  images: string[];
+  capacity: number;
+  bedrooms: number;
+  bathrooms: number;
+  pricePerNight: number;
+  /** Yalnızca fiyat — `priceRange` min/max için başka bir şey istemiyor. */
+  seasons: { price: number }[];
+  rating: number;
+  featured: boolean;
+  discountPercent?: number;
+  dealTag?: Villa["dealTag"];
+}
+
+/** Kart sorgusunun sütunları — `VILLA_FIELDS`'in çok küçük bir altkümesi. */
+const CARD_FIELDS = `
+  slug, name, code, capacity, bedrooms, bathrooms,
+  rating, featured, discount_percent, deal_tag, base_price, amenities,
+  region_id,
+  regions ( name, province ),
+  villa_images ( storage_path, sort_order ),
+  villa_seasons ( price )
+`;
+
+interface CardRow {
+  slug: string;
+  name: string;
+  code: string | null;
+  capacity: number;
+  bedrooms: number;
+  bathrooms: number;
+  rating: number | null;
+  featured: boolean;
+  discount_percent: number | null;
+  deal_tag: Villa["dealTag"] | null;
+  base_price: number;
+  amenities: AmenityKey[] | null;
+  region_id: string | null;
+  regions: { name: string; province: string } | null;
+  villa_images: { storage_path: string; sort_order: number }[];
+  villa_seasons: { price: number }[];
+}
+
+function mapCard(r: CardRow): VillaCardData {
+  return {
+    slug: r.slug,
+    name: r.name,
+    code: r.code ?? undefined,
+    region: r.regions?.name ?? "",
+    province: r.regions?.province ?? "",
+    images: [...(r.villa_images ?? [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .slice(0, 5)
+      .map((i) => imageUrl(i.storage_path)),
+    capacity: r.capacity,
+    bedrooms: r.bedrooms,
+    bathrooms: r.bathrooms,
+    pricePerNight: Number(r.base_price),
+    seasons: (r.villa_seasons ?? []).map((x) => ({ price: Number(x.price) })),
+    rating: Number(r.rating ?? 0),
+    featured: r.featured,
+    discountPercent: r.discount_percent ?? undefined,
+    dealTag: r.deal_tag ?? undefined,
+  };
+}
+
+/**
+ * Yayındaki en yüksek gecelik taban fiyat — fiyat kaydırıcısının üst sınırı.
+ *
+ * Sınır eskiden kodda `25000` olarak sabitti ve hem varsayılan hem tavan
+ * değerdi: gecelik tabanı bunun üstünde olan hiçbir villa HİÇBİR koşulda
+ * listelenemiyordu. En yüksek komisyonlu lüks segment siteden görünmezdi.
+ */
+/**
+ * Ana sayfa için TÜM yayınlanmış villalar — ama yalnızca kart alanlarıyla.
+ *
+ * Ana sayfa bunları bölge sayaçları, bölge kapak görseli ve kategori
+ * satırları için kullanıyor; hiçbiri açıklama/blok/sezon detayı istemiyor.
+ * Tam `Villa` ile villa başına 14,3 KB, kart tipiyle ~0,9 KB.
+ */
+export async function getVillaCards(): Promise<VillaCardData[]> {
+  const { data, error } = await supabaseServer()
+    .from("villas")
+    .select(CARD_FIELDS)
+    .eq("status", "published")
+    .order("featured", { ascending: false })
+    .order("name");
+
+  if (error) throw new Error(`Villa kartları okunamadı: ${error.message}`);
+  return (data as unknown as CardRow[]).map(mapCard);
+}
+
+export async function getVillaPriceCeiling(): Promise<number> {
+  const { data, error } = await supabaseServer()
+    .from("villas")
+    .select("base_price")
+    .eq("status", "published")
+    .order("base_price", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return 25000;
+  // Yukarı yuvarla ki en pahalı villa kaydırıcının tam ucunda kalmasın.
+  const max = Number(data.base_price) || 25000;
+  return Math.max(5000, Math.ceil(max / 1000) * 1000);
+}
+
+export type VillaSort = "featured" | "priceAsc" | "priceDesc" | "rating";
+
+export interface VillaListQuery {
+  /** Bölge slug'ı — alt bölgeler de dahil edilir. */
+  bolge?: string;
+  /** Kategori slug'ı. */
+  kategori?: string;
+  /** Villa adında arama. */
+  q?: string;
+  kisi?: number;
+  yatak?: number;
+  maxFiyat?: number;
+  ozellik?: AmenityKey[];
+  sirala?: VillaSort;
+  sayfa?: number;
+}
+
+export const VILLAS_PAGE_SIZE = 24;
+
+/** Bir bölgenin kendisi + tüm alt bölgelerinin id'leri. */
+function descendantRegionIds(regions: Region[], slug: string): string[] {
+  const root = regions.find((r) => r.slug === slug || r.name === slug);
+  if (!root) return [];
+  const ids = [root.id];
+  const walk = (parentId: string) => {
+    for (const r of regions) {
+      if (r.parentId === parentId) {
+        ids.push(r.id);
+        walk(r.id);
+      }
+    }
+  };
+  walk(root.id);
+  return ids;
+}
+
+/**
+ * Herkese açık villa listesi — filtre ve sayfalama SUNUCUDA.
+ *
+ * Eskiden `/villalar` tüm katalogu istemciye gönderiyor ve filtreleme her tuş
+ * vuruşunda tarayıcıda 600 elemanlı dizide çalışıyordu; kart başına 5 görselle
+ * DOM'da 3.000 `<img>` ve 2.400 dokunma dinleyicisi oluşuyordu. Panel bunu zaten
+ * doğru yapıyordu (25/sayfa `.range()`); herkese açık taraf yapmıyordu.
+ */
+export async function getVillaCardPage(
+  f: VillaListQuery,
+  regions: Region[],
+  categoryVillaSlugs?: string[]
+): Promise<{
+  items: VillaCardData[];
+  total: number;
+  page: number;
+  pageCount: number;
+}> {
+  const page = Math.max(1, f.sayfa ?? 1);
+  const offset = (page - 1) * VILLAS_PAGE_SIZE;
+
+  let q = supabaseServer()
+    .from("villas")
+    .select(CARD_FIELDS, { count: "exact" })
+    .eq("status", "published");
+
+  if (f.bolge) {
+    const ids = descendantRegionIds(regions, f.bolge);
+    // Bölge çözülemezse boş sonuç dön — eskiden bilinmeyen slug tüm listeyi
+    // gösteriyordu (ve sayfa yine 200 dönüyordu).
+    if (ids.length === 0) {
+      return { items: [], total: 0, page, pageCount: 1 };
+    }
+    q = q.in("region_id", ids);
+  }
+
+  if (categoryVillaSlugs) {
+    if (categoryVillaSlugs.length === 0) {
+      return { items: [], total: 0, page, pageCount: 1 };
+    }
+    q = q.in("slug", categoryVillaSlugs);
+  }
+
+  if (f.q) q = q.ilike("name", `%${f.q.replace(/[%_,()]/g, " ")}%`);
+  if (f.kisi) q = q.gte("capacity", f.kisi);
+  if (f.yatak) q = q.gte("bedrooms", f.yatak);
+  if (f.maxFiyat) q = q.lte("base_price", f.maxFiyat);
+  if (f.ozellik?.length) q = q.contains("amenities", f.ozellik);
+
+  q =
+    f.sirala === "priceAsc"
+      ? q.order("base_price", { ascending: true })
+      : f.sirala === "priceDesc"
+        ? q.order("base_price", { ascending: false })
+        : f.sirala === "rating"
+          ? q.order("rating", { ascending: false })
+          : q.order("featured", { ascending: false }).order("rating", {
+              ascending: false,
+            });
+
+  const { data, count, error } = await q.range(offset, offset + VILLAS_PAGE_SIZE - 1);
+
+  if (error) {
+    // Kullanıcı elle `?sayfa=99` yazarsa (veya filtre daraldıktan sonra eski
+    // sayfada kalırsa) PostgREST 416 "Requested range not satisfiable" döner.
+    // Bu bir hata değil, "bu sayfada kayıt yok" demektir — 500 basma.
+    const outOfRange =
+      error.code === "PGRST103" || /range not satisfiable/i.test(error.message);
+    if (outOfRange) {
+      return { items: [], total: count ?? 0, page, pageCount: 1 };
+    }
+    throw new Error(`Villalar okunamadı: ${error.message}`);
+  }
+
+  const total = count ?? 0;
+  return {
+    items: (data as unknown as CardRow[]).map(mapCard),
+    total,
+    page,
+    pageCount: Math.max(1, Math.ceil(total / VILLAS_PAGE_SIZE)),
+  };
 }
 
 export interface Region {

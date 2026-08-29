@@ -1,13 +1,18 @@
 import "server-only";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseSession } from "@/lib/supabase/session";
 import { CustomPage } from "@/lib/types";
 import { mapPage } from "@/lib/data/pages";
 
 /**
  * Yönetim paneli için tüm sayfaları (taslak + yayınlanmış) listeler.
+ *
+ * Oturumlu (authenticated) istemci kullanır: pages RLS select politikası
+ * yalnızca `status='published'` VEYA `auth.role()='authenticated'` satırlarını
+ * döndürür; anon istemci taslakları göremediğinden panelde kaybolurlardı.
  */
 export async function getAdminPages(): Promise<CustomPage[]> {
-  const { data, error } = await supabaseServer()
+  const supabase = await supabaseSession();
+  const { data, error } = await supabase
     .from("pages")
     .select("*")
     .order("sort_order", { ascending: true })
@@ -21,7 +26,8 @@ export async function getAdminPages(): Promise<CustomPage[]> {
  * Yönetim paneli düzenleme ekranı için ID ile sayfa detayını getirir.
  */
 export async function getAdminPageById(id: string): Promise<CustomPage | null> {
-  const { data, error } = await supabaseServer()
+  const supabase = await supabaseSession();
+  const { data, error } = await supabase
     .from("pages")
     .select("*")
     .eq("id", id)

@@ -1,14 +1,17 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { SlidersHorizontal, X, Search } from "lucide-react";
 import VillaCard from "./VillaCard";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
-import type { AmenityKey, Villa } from "@/lib/types";
-import type { Region } from "@/lib/data/villas";
-import type { Category } from "@/lib/data/categories";
+import type { AmenityKey } from "@/lib/types";
+import type {
+  Region,
+  VillaCardData,
+  VillaListQuery,
+} from "@/lib/data/villas";
 import { amenityIcons } from "@/lib/amenityIcons";
 
 const filterAmenities: AmenityKey[] = [
@@ -25,132 +28,143 @@ const filterAmenities: AmenityKey[] = [
 type Sort = "featured" | "priceAsc" | "priceDesc" | "rating";
 
 export default function VillaListClient({
-  villas,
+  items,
+  total,
+  page,
+  pageCount,
+  query,
+  priceCeiling,
+  regionLabel,
   regions,
-  categories,
-  initialCitySlug,
-  initialRegionSlug,
 }: {
-  villas: Villa[];
+  /** Sunucuda filtrelenmiş ve sayfalanmış kartlar (en fazla VILLAS_PAGE_SIZE). */
+  items: VillaCardData[];
+  total: number;
+  page: number;
+  pageCount: number;
+  /** URL'den çözülmüş filtre değerleri. */
+  query: VillaListQuery;
+  /** Fiyat kaydırıcısının üst sınırı — veriden türetilir, sabit değil. */
+  priceCeiling: number;
+  /** Başlıkta gösterilecek bölge ADI (slug değil). */
+  regionLabel?: string;
   regions: Region[];
-  categories: Category[];
-  initialCitySlug?: string;
-  initialRegionSlug?: string;
 }) {
   const { t, lang, amenity } = useI18n();
-  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // ?category=sea-view ile gelindiğinde o kategorinin villalarına daralt
-  const categorySlug = params.get("category");
-  const category = categories.find((c) => c.slug === categorySlug) ?? null;
-
-  // Başlangıç bölgesi: props veya searchParams
-  const initialSelectedRegion = useMemo(() => {
-    if (initialRegionSlug) {
-      const found = regions.find((r) => r.slug === initialRegionSlug);
-      return found?.slug ?? initialRegionSlug;
-    }
-    if (initialCitySlug) {
-      const found = regions.find((r) => r.slug === initialCitySlug);
-      return found?.slug ?? initialCitySlug;
-    }
-    const queryRegion = params.get("region");
-    if (queryRegion) {
-      const found = regions.find(
-        (r) => r.slug === queryRegion || r.name === queryRegion
-      );
-      return found?.slug ?? queryRegion;
-    }
-    return "";
-  }, [initialCitySlug, initialRegionSlug, params, regions]);
-
-  const [region, setRegion] = useState(initialSelectedRegion);
-  const [q, setQ] = useState(params.get("q") ?? "");
-  const [minGuests, setMinGuests] = useState(Number(params.get("guests")) || 0);
-  const [minBeds, setMinBeds] = useState(0);
-  const [maxPrice, setMaxPrice] = useState(25000);
-  const [amenities, setAmenities] = useState<AmenityKey[]>([]);
-  const [sort, setSort] = useState<Sort>("featured");
+  // Filtre değerleri SUNUCUDAN prop olarak gelir; `useSearchParams` bilerek
+  // kullanılmıyor. Statik bir sayfada onu çağırmak Suspense sınırının içini
+  // tümüyle istemciye devrediyordu (CSR bailout): `/villalar`'ın prerender
+  // HTML'inin %97'si inline script'ti ve DOM'da tek bir villa adı bile yoktu —
+  // arama motoru boş sayfa görüyordu.
+  const [region, setRegionLocal] = useState(query.bolge ?? "");
+  const [q, setQLocal] = useState(query.q ?? "");
+  const [minGuests, setMinGuestsLocal] = useState(query.kisi ?? 0);
+  const [minBeds, setMinBedsLocal] = useState(query.yatak ?? 0);
+  const [maxPrice, setMaxPriceLocal] = useState(query.maxFiyat ?? priceCeiling);
+  const [amenities, setAmenitiesLocal] = useState<AmenityKey[]>(
+    query.ozellik ?? []
+  );
+  const [sort, setSortLocal] = useState<Sort>(query.sirala ?? "featured");
   const [drawer, setDrawer] = useState(false);
 
-  const toggleAmenity = (a: AmenityKey) =>
-    setAmenities((prev) =>
-      prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]
-    );
+  /**
+   * Filtreyi URL'e yazar.
+   *
+   * Filtreler eskiden saf `useState`'ti: kullanıcı 6 filtre uygulayıp bir villaya
+   * girip geri bastığında hepsi sıfırlanıyordu, link paylaşılamıyordu ve filtreli
+   * sayfalar arama motoruna hiç görünmüyordu. `push` kullanılıyor ki geri tuşu
+   * bir önceki filtreye dönsün.
+   */
+  const applyFilters = (patch: Record<string, string | number | string[] | undefined>) => {
+    const current: Record<string, string | number | string[] | undefined> = {
+      bolge: region || undefined,
+      kategori: query.kategori,
+      q: q || undefined,
+      kisi: minGuests || undefined,
+      yatak: minBeds || undefined,
+      maxFiyat: maxPrice < priceCeiling ? maxPrice : undefined,
+      ozellik: amenities.length ? amenities : undefined,
+      sirala: sort !== "featured" ? sort : undefined,
+      ...patch,
+      // Filtre değişince ilk sayfaya dön (patch açıkça sayfa vermediyse).
+      sayfa: patch.sayfa,
+    };
 
-  const clear = () => {
-    setRegion("");
-    setQ("");
-    setMinGuests(0);
-    setMinBeds(0);
-    setMaxPrice(25000);
-    setAmenities([]);
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(current)) {
+      if (v === undefined || v === "" || v === 0) continue;
+      if (Array.isArray(v)) v.forEach((x) => sp.append(k, String(x)));
+      else sp.set(k, String(v));
+    }
+    const qs = sp.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const results = useMemo(() => {
-    const inCategory = category ? new Set(category.villaSlugs) : null;
+  // Metin ve kaydırıcı gibi sürekli girdilerde her tuşta URL yazmamak için
+  // kısa bir gecikme; diğerleri anında uygulanır.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyDebounced = (
+    patch: Record<string, string | number | string[] | undefined>
+  ) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => applyFilters(patch), 450);
+  };
 
-    const selectedRegionObj = region
-      ? regions.find((r) => r.slug === region || r.name === region)
-      : null;
+  const setRegion = (v: string) => {
+    setRegionLocal(v);
+    applyFilters({ bolge: v || undefined });
+  };
+  const setQ = (v: string) => {
+    setQLocal(v);
+    applyDebounced({ q: v || undefined });
+  };
+  const setMinGuests = (v: number) => {
+    setMinGuestsLocal(v);
+    applyFilters({ kisi: v || undefined });
+  };
+  const setMinBeds = (v: number) => {
+    setMinBedsLocal(v);
+    applyFilters({ yatak: v || undefined });
+  };
+  const setMaxPrice = (v: number) => {
+    setMaxPriceLocal(v);
+    applyDebounced({ maxFiyat: v < priceCeiling ? v : undefined });
+  };
+  const setSort = (v: Sort) => {
+    setSortLocal(v);
+    applyFilters({ sirala: v !== "featured" ? v : undefined });
+  };
 
-    // Seçilen konum ve varsa altındaki tüm alt konumların isim/slug set'leri
-    const matchedLocationNames = new Set<string>();
-    const matchedLocationSlugs = new Set<string>();
+  const toggleAmenity = (a: AmenityKey) => {
+    const next = amenities.includes(a)
+      ? amenities.filter((x) => x !== a)
+      : [...amenities, a];
+    setAmenitiesLocal(next);
+    applyFilters({ ozellik: next.length ? next : undefined });
+  };
 
-    if (selectedRegionObj) {
-      matchedLocationNames.add(selectedRegionObj.name);
-      matchedLocationSlugs.add(selectedRegionObj.slug);
-
-      // Recursive veya childMap ile alt düğümleri topla
-      const collectChildren = (parentId: string) => {
-        regions.forEach((r) => {
-          if (r.parentId === parentId) {
-            matchedLocationNames.add(r.name);
-            matchedLocationSlugs.add(r.slug);
-            collectChildren(r.id);
-          }
-        });
-      };
-
-      collectChildren(selectedRegionObj.id);
-    }
-
-    const list = villas.filter((v) => {
-      if (inCategory && !inCategory.has(v.slug)) return false;
-
-      if (selectedRegionObj) {
-        const matches =
-          matchedLocationNames.has(v.region) ||
-          matchedLocationSlugs.has(v.region) ||
-          matchedLocationNames.has(v.province);
-
-        if (!matches) return false;
-      } else if (region) {
-        if (v.region !== region && v.province !== region) return false;
-      }
-
-      if (q && !v.name.toLowerCase().includes(q.toLowerCase())) return false;
-      if (minGuests && v.capacity < minGuests) return false;
-      if (minBeds && v.bedrooms < minBeds) return false;
-      if (v.pricePerNight > maxPrice) return false;
-      if (amenities.some((a) => !v.amenities.includes(a))) return false;
-      return true;
+  const clear = () => {
+    setRegionLocal("");
+    setQLocal("");
+    setMinGuestsLocal(0);
+    setMinBedsLocal(0);
+    setMaxPriceLocal(priceCeiling);
+    setAmenitiesLocal([]);
+    applyFilters({
+      bolge: undefined,
+      q: undefined,
+      kisi: undefined,
+      yatak: undefined,
+      maxFiyat: undefined,
+      ozellik: undefined,
     });
+  };
 
-    return list.sort((a, b) => {
-      switch (sort) {
-        case "priceAsc":
-          return a.pricePerNight - b.pricePerNight;
-        case "priceDesc":
-          return b.pricePerNight - a.pricePerNight;
-        case "rating":
-          return b.rating - a.rating;
-        default:
-          return Number(b.featured) - Number(a.featured) || b.rating - a.rating;
-      }
-    });
-  }, [villas, category, region, q, minGuests, minBeds, maxPrice, amenities, sort]);
+  // Sonuçlar sunucudan hazır gelir; istemcide filtreleme/sıralama YOK.
+  const results = items;
 
   const Filters = (
     <div className="space-y-6">
@@ -298,10 +312,13 @@ export default function VillaListClient({
         <label className="mb-2 block text-sm font-semibold text-brand-900">
           {t("filter.price")}
         </label>
+        {/* Sınırlar artık veriden: `priceCeiling` yayındaki en yüksek gecelik
+            taban fiyat. Eskiden hem varsayılan hem tavan 25.000 idi ve gecelik
+            tabanı bunun üstündeki villalar hiçbir koşulda listelenemiyordu. */}
         <input
           type="range"
-          min={4000}
-          max={25000}
+          min={0}
+          max={priceCeiling}
           step={500}
           value={maxPrice}
           onChange={(e) => setMaxPrice(Number(e.target.value))}
@@ -345,10 +362,15 @@ export default function VillaListClient({
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-brand-950 sm:text-3xl">
-          {region || t("list.title")}
+          {/* Eskiden bölge SLUG'ı basılıyordu ("fethiye"): küçük harf, Türkçe
+              karaktersiz, "villa" kelimesi yok — sayfanın en güçlü on-page
+              sinyali boşa gidiyordu. */}
+          {regionLabel
+            ? `${regionLabel} ${t("list.titleRegion")}`
+            : t("list.title")}
         </h1>
-        <p className="mt-1 text-brand-900/60">
-          {results.length} {t("list.results")}
+        <p aria-live="polite" aria-atomic="true" className="mt-1 text-brand-900/80">
+          {total} {t("list.results")}
         </p>
       </div>
 
@@ -382,11 +404,44 @@ export default function VillaListClient({
               {t("list.noResults")}
             </div>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-              {results.map((v) => (
-                <VillaCard key={v.slug} villa={v} />
-              ))}
-            </div>
+            <>
+              <ul className="grid list-none gap-6 p-0 sm:grid-cols-2 xl:grid-cols-3">
+                {results.map((v, i) => (
+                  <li key={v.slug}>
+                    {/* Yalnızca ilk satır öncelikli: 24 kartın hepsi preload
+                        edilirse hiçbiri öncelikli olmaz ve LCP bozulur. */}
+                    <VillaCard villa={v} eager={i < 3} />
+                  </li>
+                ))}
+              </ul>
+
+              {pageCount > 1 && (
+                <nav
+                  aria-label="Sayfalar"
+                  className="mt-10 flex items-center justify-center gap-2"
+                >
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => applyFilters({ sayfa: page - 1 })}
+                    className="rounded-lg border border-sand-200 px-4 py-2 text-sm font-semibold text-brand-800 transition hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t("list.prevPage")}
+                  </button>
+                  <span className="px-3 text-sm font-semibold text-brand-900/80">
+                    {page} / {pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= pageCount}
+                    onClick={() => applyFilters({ sayfa: page + 1 })}
+                    className="rounded-lg border border-sand-200 px-4 py-2 text-sm font-semibold text-brand-800 transition hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t("list.nextPage")}
+                  </button>
+                </nav>
+              )}
+            </>
           )}
         </div>
       </div>

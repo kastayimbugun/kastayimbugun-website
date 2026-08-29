@@ -14,7 +14,7 @@ import {
   ChevronRight,
   Zap,
 } from "lucide-react";
-import type { Villa } from "@/lib/types";
+import type { VillaCardData } from "@/lib/data/villas";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
 import { villaCode, priceRange } from "@/lib/villaUtils";
@@ -22,7 +22,22 @@ import { villaCode, priceRange } from "@/lib/villaUtils";
 /** Kartta gösterilecek görsel sayısı — vitrin için ilk birkaçı yeter. */
 const CARD_IMAGES = 5;
 
-export default function VillaCard({ villa }: { villa: Villa }) {
+export default function VillaCard({
+  villa,
+  eager = false,
+}: {
+  villa: VillaCardData;
+  /**
+   * Bu kart ilk ekranda mı? Yalnızca o zaman kapak fotoğrafı öncelikli yüklenir.
+   *
+   * Eskiden `priority={i === 0}` yazıyordu ama `i` KARTIN KENDİ galerisindeki
+   * indeksti — yani listedeki HER kart kendi ilk fotoğrafını "en öncelikli"
+   * ilan ediyordu. Ana sayfada ölçülen: 25 adet `<link rel=preload>`. Hepsi
+   * öncelikli olunca hiçbiri öncelikli olmaz; bant genişliği gerçek LCP ögesiyle
+   * ekranın çok altındaki kartlar arasında bölünür.
+   */
+  eager?: boolean;
+}) {
   const { t, lang } = useI18n();
   const [fav, setFav] = useState(false);
 
@@ -156,8 +171,13 @@ export default function VillaCard({ villa }: { villa: Villa }) {
                 src={src}
                 alt={`${villa.name} — ${i + 1}`}
                 fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                priority={i === 0}
+                // Üst sınır şart: konteyner `max-w-7xl` ile sabit, kart ~420px'i
+                // geçmiyor. Sınırsız `33vw` 2560px ekranda 1920w adayını seçtiriyor
+                // ve yuvanın ~23 katı piksel indiriliyordu.
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1400px) 33vw, 420px"
+                // Next 16'da `priority` deprecate edildi, yerine `preload` geldi.
+                preload={eager && i === 0}
+                loading={eager && i === 0 ? undefined : "lazy"}
                 draggable={false}
                 className="select-none object-cover"
               />

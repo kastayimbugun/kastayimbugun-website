@@ -31,8 +31,19 @@ export default function AdBanner({
           aria-label="Kampanya"
           className="hidden overflow-hidden rounded-2xl sm:block"
         >
+          {/* width/height olmadan görsel önce 0px yer kaplıyor, yüklenince
+              ~320px'e sıçrayıp altındaki tüm bölümleri aşağı itiyordu (CLS).
+              Banner sayfa ortasında olduğu için etkisi doğrudan görünür.
+              Ölçüler panelde önerilen banner boyutlarıdır. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={web} alt="Kampanya" className="h-auto w-full" />
+          <img
+            src={web}
+            alt="Kampanya"
+            width={1920}
+            height={480}
+            style={{ aspectRatio: "1920 / 480" }}
+            className="h-auto w-full"
+          />
         </Link>
       )}
       {mobile && (
@@ -42,7 +53,14 @@ export default function AdBanner({
           className="block overflow-hidden rounded-2xl sm:hidden"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={mobile} alt="Kampanya" className="h-auto w-full" />
+          <img
+            src={mobile}
+            alt="Kampanya"
+            width={1320}
+            height={1080}
+            style={{ aspectRatio: "1320 / 1080" }}
+            className="h-auto w-full"
+          />
         </Link>
       )}
     </section>

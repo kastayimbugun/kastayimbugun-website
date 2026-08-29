@@ -22,7 +22,7 @@ import CategoryBrowser from "@/components/CategoryBrowser";
 import AdBanner from "@/components/AdBanner";
 import { useI18n } from "@/lib/i18n";
 import type { Villa } from "@/lib/types";
-import type { Region } from "@/lib/data/villas";
+import type { Region, VillaCardData } from "@/lib/data/villas";
 import type { Category } from "@/lib/data/categories";
 import type { SiteSettings } from "@/lib/data/site";
 import {
@@ -38,8 +38,8 @@ export default function HomeClient({
   categories,
   site,
 }: {
-  villas: Villa[];
-  featured: Villa[];
+  villas: VillaCardData[];
+  featured: VillaCardData[];
   regions: Region[];
   categories: Category[];
   site: SiteSettings;
@@ -95,8 +95,8 @@ export default function HomeClient({
       </div>
 
       <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {featured.map((v) => (
-          <VillaCard key={v.slug} villa={v} />
+        {featured.map((v, i) => (
+          <VillaCard key={v.slug} villa={v} eager={i < 3} />
         ))}
       </div>
     </section>

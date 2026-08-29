@@ -66,6 +66,12 @@ export interface FooterColumn {
   links: FooterLink[];
   /** type === "links" — hazır kaynaktan doldur (elle link yerine). */
   autoSource: "regions" | "pages" | null;
+  /**
+   * type === "links" && autoSource === "regions" — footer'da gösterilecek
+   * bölge slug'ları. `null` ⇒ tüm bölgeler (geriye uyumlu varsayılan).
+   * Dizi ⇒ yalnızca bu slug'lar, bölge sırası korunarak. `[]` ⇒ hiçbiri.
+   */
+  regionSlugs: string[] | null;
   /** type === "text" */
   bodyTr: string;
   bodyEn: string;
@@ -133,6 +139,7 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
       titleEn: "Discover",
       links: [],
       autoSource: "regions",
+      regionSlugs: null,
       bodyTr: "",
       bodyEn: "",
       items: [],
@@ -144,6 +151,7 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
       titleEn: "Company",
       links: [],
       autoSource: "pages",
+      regionSlugs: null,
       bodyTr: "",
       bodyEn: "",
       items: [],
@@ -163,6 +171,7 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
         { labelTr: "Sıkça Sorulan Sorular", labelEn: "FAQ", href: "#" },
       ],
       autoSource: null,
+      regionSlugs: null,
       bodyTr: "",
       bodyEn: "",
       items: [],
@@ -249,6 +258,9 @@ function resolveColumn(raw: unknown): FooterColumn {
     : [];
   const autoSource =
     c.autoSource === "regions" || c.autoSource === "pages" ? c.autoSource : null;
+  const regionSlugs = Array.isArray(c.regionSlugs)
+    ? c.regionSlugs.filter((s): s is string => typeof s === "string")
+    : null;
 
   return {
     id: str(c.id) || newId(),
@@ -257,6 +269,7 @@ function resolveColumn(raw: unknown): FooterColumn {
     titleEn: str(c.titleEn) || str(c.titleTr),
     links,
     autoSource,
+    regionSlugs,
     bodyTr: str(c.bodyTr),
     bodyEn: str(c.bodyEn),
     items,
@@ -299,6 +312,7 @@ export function emptyFooterColumn(type: FooterColumnType = "links"): FooterColum
     titleEn: "",
     links: [],
     autoSource: null,
+    regionSlugs: null,
     bodyTr: "",
     bodyEn: "",
     items: [],

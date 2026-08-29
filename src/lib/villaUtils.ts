@@ -1,4 +1,8 @@
-import type { Villa } from "./types";
+/** `priceRange` için gereken minimum şekil — tam `Villa` şart değil. */
+export interface PriceRangeInput {
+  pricePerNight: number;
+  seasons: { price: number }[];
+}
 
 /**
  * Veri kaynağından bağımsız, istemcide de çalışan villa yardımcıları.
@@ -12,7 +16,7 @@ export function villaCode(slug: string): string {
 }
 
 /** Sezonluk fiyatlardan gecelik fiyat aralığı (min–max). */
-export function priceRange(v: Villa): { min: number; max: number } {
+export function priceRange(v: PriceRangeInput): { min: number; max: number } {
   const prices = v.seasons.map((s) => s.price);
   if (!prices.length) return { min: v.pricePerNight, max: v.pricePerNight };
   return { min: Math.min(...prices), max: Math.max(...prices) };

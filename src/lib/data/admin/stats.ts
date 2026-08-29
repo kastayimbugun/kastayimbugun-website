@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseSession } from "@/lib/supabase/session";
-import { toISO } from "@/lib/format";
+import { businessToday } from "@/lib/format";
 
 export interface DashboardArrival {
   bookingId: string;
@@ -46,10 +46,14 @@ export interface DashboardOverview {
  */
 export async function getDashboardOverview(): Promise<DashboardOverview> {
   const supabase = await supabaseSession();
-  const today = toISO(new Date());
+  // "Bugün" ve "bu ay" işletme saatine göre (Europe/Istanbul). Sunucu UTC
+  // çalıştığı için sabitlenmezse gece 00:00–03:00 arası dashboard bir gün
+  // geride kalıyor: resepsiyon sabaha kadar yanlış giriş listesiyle çalışır ve
+  // ayın 1'inde gece gelen talepler "bu ay" sayısına hiç girmez.
+  const today = businessToday();
+  const monthStart = `${today.slice(0, 7)}-01`;
 
   const now = new Date();
-  const monthStart = toISO(new Date(now.getFullYear(), now.getMonth(), 1));
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoISO = sevenDaysAgo.toISOString();
@@ -108,12 +112,12 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     supabase
       .from("booking_requests")
       .select("*", { count: "exact", head: true })
-      .gte("created_at", monthStart),
+      .gte("created_at", `${monthStart}T00:00:00+03:00`),
     supabase
       .from("booking_requests")
       .select("price_estimate")
       .eq("status", "confirmed")
-      .gte("created_at", monthStart),
+      .gte("created_at", `${monthStart}T00:00:00+03:00`),
     // Yanıt süresi (Dalga 2.4): yalnızca yanıtlanmış son 30 günlük talepler.
     // Aralık dar olduğu için satırları çekip ortalamayı burada almak yeterli.
     supabase
