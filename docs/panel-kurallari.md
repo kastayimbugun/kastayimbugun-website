@@ -53,6 +53,27 @@ Bir katman aşılsa bile bir alttaki durdurur.
   yazma politikası yok → rol ataması yalnızca yönetimsel yolla yapılır; bu bilinçli.)
 - Rol bazlı yetkiler netleşince RLS'te ayrıştırılır (ör. silme yalnızca admin).
 
+### Granüler modül izinleri (Faz — personel yönetimi)
+- `profiles.permissions text[]` her personelin erişebildiği **modül** listesini tutar
+  (`villas`, `reservations`, `applications`, `regions`, `categories`, `pages`, `settings`).
+  Tek kaynak: `src/lib/auth/permissions.ts` (`MODULE_KEYS`, `can()`). **admin** rolü listeyi
+  yok sayar (hepsine erişir). **Personel** ekranı yalnızca `admin`e açıktır (izinle verilmez).
+- **İzin nerede zorlanır:**
+  - **Katman 2 (sayfa):** her modül klasöründe `layout.tsx` → `requireModule(key)`; izinsiz
+    personel `/yonetim`'e döner. Nav (`AdminShell`) yalnızca izinli öğeleri gösterir.
+  - **Katman 3 (action):** her admin action ilk satırda `requirePermission(key)` çağırır
+    (dosya→modül birebir; `bookings.ts`→`reservations`, `villas/images/bulk`→`villas`, …).
+  - **Katman 4 (RLS):** **bilerek `is_staff()`'te kalır** (modül-bazlı değil). Neden: Talepler
+    ve Rezervasyonlar aynı tabloyu (`booking_requests`) paylaşır, Takvim birden çok tabloya
+    dokunur → temiz modül-tablo eşlemesi yok. RLS tüm **personel-dışı** erişimi keser; personel-
+    **içi** ayrım küçük/güvenilir ekip için app katmanında (2+3) yeterli. Büyürse RLS'e taşınır.
+- **`service_role` istisnası (yalnızca personel yönetimi):** kullanıcı oluşturma/silme/şifre
+  `auth.admin.*` gerektirdiğinden `src/lib/actions/admin/staff.ts` `service_role` kullanır —
+  **her action önce `role==='admin'` doğrular.** Panelin başka hiçbir yeri `service_role`
+  kullanmaz. (Genel kural: panel oturumlu istemci + RLS ile çalışır.)
+- **Kilitlenme koruması (değişmezler):** son admin editöre düşürülemez/silinemez; admin kendi
+  rolünü düşüremez ve kendini silemez. Bu kontroller staff action'larında zorlanır.
+
 ---
 
 ## 2. Gizlilik — "veri sızmaz"
