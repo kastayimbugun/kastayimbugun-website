@@ -33,13 +33,14 @@ const nextConfig: NextConfig = {
         hostname: "*.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
-      // GEÇİCİ — seed'lenen demo veri hâlâ dış stok görsel URL'si tutuyor
-      // (villalar picsum, kategoriler unsplash). Gerçek fotoğraflar panelden
-      // yüklenince BU İKİ SATIRI SİL; Faz 3 ondan önce bitmiş sayılmaz.
-      { protocol: "https", hostname: "picsum.photos" },
+      // picsum ve eski site (kastayimbugunvillalari.com) 29.08.2026'da
+      // kaldırıldı: villa görsellerinin tamamı (1.102/1.102) Supabase
+      // Storage'a taşındı, DB'de bu host'lara tek referans kalmadı.
+      //
+      // Unsplash HÂLÂ GEREKLİ: 13 kategori görseli demo seed'inden kalma
+      // stok fotoğrafa işaret ediyor. Kategorilere gerçek görsel yüklenince
+      // bu satır da silinmeli (aşağıdaki CSP img-src ile birlikte).
       { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "www.kastayimbugunvillalari.com" },
-      { protocol: "https", hostname: "kastayimbugunvillalari.com" },
     ],
     // Next 16'da izin verilen kalite listesi açıkça yazılır.
     qualities: [75],
@@ -75,9 +76,9 @@ const nextConfig: NextConfig = {
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${devEval} https://challenges.cloudflare.com`,
       "style-src 'self' 'unsafe-inline'",
-      // Villa fotoğrafları Supabase Storage'dan; picsum/unsplash demo verisi
-      // temizlenince (Faz 5.9.5) buradan da çıkarılacak.
-      `img-src 'self' blob: data: ${supabaseOrigin} https://picsum.photos https://images.unsplash.com https://www.kastayimbugunvillalari.com https://kastayimbugunvillalari.com`,
+      // Villa fotoğrafları Supabase Storage'dan. Unsplash yalnızca kategori
+      // görselleri için kaldı; onlar da değişince buradan çıkarılmalı.
+      `img-src 'self' blob: data: ${supabaseOrigin} https://images.unsplash.com`,
       "font-src 'self' data:",
       `connect-src 'self' ${supabaseOrigin} https://challenges.cloudflare.com`,
       // Turnstile widget'ı ve villa tanıtım videosu (YouTube/Vimeo gömme).
