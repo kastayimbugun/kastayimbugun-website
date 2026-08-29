@@ -1,24 +1,49 @@
 import HomeClient from "@/components/HomeClient";
-import { getVillaCards, getRegions } from "@/lib/data/villas";
+import {
+  getRegions,
+  getRegionVillaCounts,
+  getFeaturedVillaCards,
+  getVillaCardsBySlugs,
+} from "@/lib/data/villas";
 import { getCategories } from "@/lib/data/categories";
 import { getSiteSettings } from "@/lib/data/site";
 
 export const revalidate = 300;
 
+/** Ana sayfadaki bir kategori satırında en fazla kaç villa gösterilir. */
+const PER_CATEGORY = 12;
+
 export default async function Home() {
-  const [villas, regions, categories, site] = await Promise.all([
-    // Ana sayfa yalnızca kart alanlarını kullanıyor; tam villa nesnesi
-    // (açıklamalar, sezonlar, bloklar) buraya hiç gelmemeli.
-    getVillaCards(),
+  // Ana sayfa artık TÜM katalogu çekmiyor.
+  //
+  // Eskiden `getVillaCards()` ile bütün yayınlanmış villalar geliyordu ve
+  // PostgREST 1.000 satırda **sessizce kırpıyor** (ölçüldü: 1.102 satırlık
+  // tabloda sorgu 1.000 döndürdü, hata vermedi). Yani katalog 1.000'i geçtiği
+  // an ana sayfa eksik veri göstermeye başlar ve hiçbir uyarı çıkmaz.
+  //
+  // Şimdi her ihtiyaç kendi sınırlı sorgusunda:
+  //   · bölge sayaçları → Postgres sayıyor, dönen satır = bölge sayısı
+  //   · öne çıkanlar    → SQL'de filtreli + limitli
+  //   · kategori satırları → yalnızca gösterilecek slug'lar
+  const [regions, categories, site, regionCounts, featured] = await Promise.all([
     getRegions(),
     getCategories(),
     getSiteSettings(),
+    getRegionVillaCounts(),
+    getFeaturedVillaCards(PER_CATEGORY),
   ]);
+
+  // Ana sayfada gösterilecek kategorilerin villalarını tek sorguda topla.
+  const categorySlugs = categories
+    .filter((c) => c.featuredOnHome)
+    .flatMap((c) => c.villaSlugs.slice(0, PER_CATEGORY));
+  const categoryVillas = await getVillaCardsBySlugs(categorySlugs);
 
   return (
     <HomeClient
-      villas={villas}
-      featured={villas.filter((v) => v.featured)}
+      featured={featured}
+      categoryVillas={categoryVillas}
+      regionCounts={Object.fromEntries(regionCounts)}
       regions={regions}
       categories={categories}
       site={site}

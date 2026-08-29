@@ -265,32 +265,80 @@ function qualityIssues(v) {
 // gerçekten yoksa açılır.
 // ---------------------------------------------------------------------------
 async function buildRegionResolver() {
-  const { data, error } = await supabase.from("regions").select("id, name, slug");
+  const { data, error } = await supabase
+    .from("regions")
+    .select("id, name, slug, parent_id, depth");
   if (error) throw new Error(`Bölgeler okunamadı: ${error.message}`);
 
   const bySlug = new Map((data ?? []).map((r) => [r.slug, r]));
   const created = [];
 
   return {
+    /**
+     * Bölgeyi bulur; yoksa açar ve ÜST BÖLGEYE BAĞLAR.
+     *
+     * `parent_id` vermemek sessiz bir hata üretir: bölge kökte kalır, il
+     * kartındaki sayaç onu saymaz ve arama açılırında ilin yanında ayrı bir
+     * kök öğe gibi görünür. Mevcut katalogda "Gökseki" (2 villa) ve
+     * "Çukurbağ" (4 villa) tam olarak böyle: Kaş'a bağlı olmadıkları için
+     * Kaş kartı 21 yerine 15 gösteriyor.
+     */
     async resolve(rawRegion, rawProvince, write) {
       const slug = slugify(rawRegion || rawProvince || "");
       if (!slug) return { id: null, note: "bölge adı yok" };
 
       const hit = bySlug.get(slug);
-      if (hit) return { id: hit.id, note: null };
+      if (hit) {
+        // Zaten var ama köke bağlıysa ve bir üst adayı varsa bildir.
+        if (!hit.parent_id && rawProvince && slugify(rawProvince) !== slug) {
+          return { id: hit.id, note: `mevcut bölge köke bağlı: ${hit.name} → ${rawProvince} altına alınmalı` };
+        }
+        return { id: hit.id, note: null };
+      }
+
+      // Üst bölge (il/ilçe) — yoksa o da açılır.
+      let parent = null;
+      const parentSlug = rawProvince ? slugify(rawProvince) : "";
+      if (parentSlug && parentSlug !== slug) {
+        parent = bySlug.get(parentSlug) ?? null;
+        if (!parent && write) {
+          const { data: p } = await supabase
+            .from("regions")
+            .insert({ slug: parentSlug, name: rawProvince, province: rawProvince, depth: 0 })
+            .select("id, name, slug, parent_id, depth")
+            .single();
+          if (p) {
+            bySlug.set(parentSlug, p);
+            created.push(p.slug);
+            parent = p;
+          }
+        }
+      }
 
       if (!write) {
-        return { id: null, note: `YENİ BÖLGE açılacak: ${rawRegion} (${slug})` };
+        return {
+          id: null,
+          note:
+            `YENİ BÖLGE açılacak: ${rawRegion} (${slug})` +
+            (parentSlug && parentSlug !== slug ? ` → üst: ${rawProvince}` : " → ÜST YOK, kökte kalacak"),
+        };
       }
+
       const { data: ins, error } = await supabase
         .from("regions")
-        .insert({ slug, name: rawRegion, province: rawProvince || rawRegion })
-        .select("id, name, slug")
+        .insert({
+          slug,
+          name: rawRegion,
+          province: rawProvince || rawRegion,
+          parent_id: parent?.id ?? null,
+          depth: parent ? (parent.depth ?? 0) + 1 : 0,
+        })
+        .select("id, name, slug, parent_id, depth")
         .single();
       if (error || !ins) return { id: null, note: `bölge açılamadı: ${error?.message}` };
       bySlug.set(slug, ins);
       created.push(ins.slug);
-      return { id: ins.id, note: `yeni bölge açıldı: ${ins.name}` };
+      return { id: ins.id, note: `yeni bölge açıldı: ${ins.name}${parent ? ` (üst: ${parent.name})` : " — KÖKTE"}` };
     },
     created,
   };

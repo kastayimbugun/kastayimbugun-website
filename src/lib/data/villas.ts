@@ -388,6 +388,111 @@ export async function getVillaCards(): Promise<VillaCardData[]> {
   return (data as unknown as CardRow[]).map(mapCard);
 }
 
+/**
+ * Bölge başına yayınlanmış villa sayısı — alt bölgeler dahil.
+ *
+ * Ana sayfa eskiden TÜM villaları çekip JS'te `villas.filter(v => v.region === name)`
+ * ile sayıyordu. İki sorun: (a) katalog 1.000 satırı geçince PostgREST **sessizce
+ * kırpıyor** ve sayaçlar yanlışlanıyor, (b) alt bölgeler sayılmadığı için envanteri
+ * olan bir il "0 villa" gösterebiliyordu.
+ *
+ * Burada sayımı Postgres yapıyor (gömülü `villas(count)`) ve dönen satır sayısı
+ * BÖLGE sayısı kadar — villa sayısından bağımsız. Hiyerarşik toplama JS'te,
+ * ~25 düğümlük ağaç üzerinde.
+ *
+ * Dönen anahtar: bölge **slug**'ı.
+ */
+export async function getRegionVillaCounts(): Promise<Map<string, number>> {
+  const { data, error } = await supabaseServer()
+    .from("regions")
+    .select("id, slug, parent_id, villas(count)")
+    .eq("villas.status", "published");
+
+  if (error) {
+    console.error("[getRegionVillaCounts] okunamadı:", error.message);
+    return new Map();
+  }
+
+  type Row = {
+    id: string;
+    slug: string;
+    parent_id: string | null;
+    villas: { count: number }[];
+  };
+  const rows = (data ?? []) as unknown as Row[];
+
+  const own = new Map<string, number>();       // id -> kendi villa sayısı
+  const children = new Map<string, string[]>(); // parentId -> [childId]
+  const slugOf = new Map<string, string>();
+
+  for (const r of rows) {
+    own.set(r.id, r.villas?.[0]?.count ?? 0);
+    slugOf.set(r.id, r.slug);
+    if (r.parent_id) {
+      children.set(r.parent_id, [...(children.get(r.parent_id) ?? []), r.id]);
+    }
+  }
+
+  // Alt ağaç toplamı; döngüye karşı ziyaret seti (0025 DB'de de engelliyor).
+  const seen = new Set<string>();
+  const total = (id: string): number => {
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const sum = (own.get(id) ?? 0) +
+      (children.get(id) ?? []).reduce((a, c) => a + total(c), 0);
+    seen.delete(id);
+    return sum;
+  };
+
+  const out = new Map<string, number>();
+  for (const r of rows) out.set(r.slug, total(r.id));
+  return out;
+}
+
+/** Öne çıkan villalar — SQL'de filtrelenir ve sınırlanır. */
+export async function getFeaturedVillaCards(limit = 12): Promise<VillaCardData[]> {
+  const { data, error } = await supabaseServer()
+    .from("villas")
+    .select(CARD_FIELDS)
+    .eq("status", "published")
+    .eq("featured", true)
+    .order("rating", { ascending: false })
+    .order("name")
+    .limit(limit);
+
+  if (error) throw new Error(`Öne çıkan villalar okunamadı: ${error.message}`);
+  return (data as unknown as CardRow[]).map(mapCard);
+}
+
+/**
+ * Verilen slug'lara göre villa KARTLARI (sıra korunur, sınırlı).
+ *
+ * Ana sayfadaki kategori satırları için: her kategorinin ilk N villası yeter,
+ * tüm katalog değil.
+ */
+export async function getVillaCardsBySlugs(
+  slugs: string[],
+  limit = 120
+): Promise<VillaCardData[]> {
+  const wanted = [...new Set(slugs)].slice(0, limit);
+  if (wanted.length === 0) return [];
+
+  const { data, error } = await supabaseServer()
+    .from("villas")
+    .select(CARD_FIELDS)
+    .eq("status", "published")
+    .in("slug", wanted);
+
+  if (error) {
+    console.error("[getVillaCardsBySlugs] okunamadı:", error.message);
+    return [];
+  }
+  const bySlug = new Map(
+    (data as unknown as CardRow[]).map((r) => [r.slug, mapCard(r)])
+  );
+  return wanted.map((sl) => bySlug.get(sl)).filter((v): v is VillaCardData => Boolean(v));
+}
+
 export async function getVillaPriceCeiling(): Promise<number> {
   const { data, error } = await supabaseServer()
     .from("villas")

@@ -21,7 +21,6 @@ import CategorySection from "@/components/CategorySection";
 import CategoryBrowser from "@/components/CategoryBrowser";
 import AdBanner from "@/components/AdBanner";
 import { useI18n } from "@/lib/i18n";
-import type { Villa } from "@/lib/types";
 import type { Region, VillaCardData } from "@/lib/data/villas";
 import type { Category } from "@/lib/data/categories";
 import type { SiteSettings } from "@/lib/data/site";
@@ -32,14 +31,19 @@ import {
 } from "@/lib/homeSections";
 
 export default function HomeClient({
-  villas,
   featured,
+  categoryVillas,
+  regionCounts,
   regions,
   categories,
   site,
 }: {
-  villas: VillaCardData[];
+  /** Öne çıkan villalar — SQL'de filtreli ve limitli. */
   featured: VillaCardData[];
+  /** Yalnızca ana sayfadaki kategori satırlarında gösterilecek villalar. */
+  categoryVillas: VillaCardData[];
+  /** Bölge slug'ı → yayınlanmış villa sayısı (alt bölgeler dahil, Postgres saydı). */
+  regionCounts: Record<string, number>;
   regions: Region[];
   categories: Category[];
   site: SiteSettings;
@@ -55,8 +59,16 @@ export default function HomeClient({
 
   const featuredCategories = categories.filter((c) => c.featuredOnHome === true);
 
-  const inRegion = (name: string) => villas.filter((v) => v.region === name);
-  const regionCount = (name: string) => inRegion(name).length;
+  // Sayaçlar artık Postgres'ten geliyor (bkz. getRegionVillaCounts). Eskiden
+  // tüm katalog istemciye inip burada filtreleniyordu; 1.000 villadan sonra
+  // sessizce kırpılıyor ve alt bölgeler hiç sayılmıyordu.
+  const regionCount = (slug: string) => regionCounts[slug] ?? 0;
+
+  // Bölge kapak görseli için yedek: panelden görsel girilmemişse elimizdeki
+  // örnekten (öne çıkanlar + kategori villaları) o bölgeden bir fotoğraf.
+  const sampleVillas = [...featured, ...categoryVillas];
+  const sampleImageOf = (regionName: string) =>
+    sampleVillas.find((v) => v.region === regionName && v.images[0])?.images[0] ?? null;
 
   // Panelden "Popüler Bölgeler" için seçim yapıldıysa yalnızca onları göster.
   // null → tümü (varsayılan); dizi → yalnızca slug'ı listede olanlar (mevcut sıra korunur).
@@ -66,8 +78,7 @@ export default function HomeClient({
       : regions.filter((r) => site.homeRegions!.includes(r.slug));
 
   /** Panelden yüklenen bölge görseli yoksa o bölgedeki bir villanın fotoğrafı. */
-  const regionImage = (r: Region) =>
-    r.heroImage ?? inRegion(r.name).find((v) => v.images[0])?.images[0] ?? null;
+  const regionImage = (r: Region) => r.heroImage ?? sampleImageOf(r.name);
 
   // Ana sayfa içerik bölümlerinin sırası (panelden yönetilir).
   const featuredCatBySlug = new Map(featuredCategories.map((c) => [c.slug, c]));
@@ -147,7 +158,7 @@ export default function HomeClient({
 
                   <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur-md">
                     <Home className="h-3.5 w-3.5" />
-                    {regionCount(r.name)} {lang === "tr" ? "villa" : "villas"}
+                    {regionCount(r.slug)} {lang === "tr" ? "villa" : "villas"}
                   </span>
 
                   {i === 0 && (
@@ -202,7 +213,7 @@ export default function HomeClient({
         <CategorySection
           key={s.key}
           category={cat}
-          allVillas={villas}
+          allVillas={categoryVillas}
           tinted={tinted}
         />
       );
@@ -212,7 +223,7 @@ export default function HomeClient({
 
   // Site geneli görsel ayarlanmadıysa vitrindeki villalardan biri devreye girer.
   const showcaseImage =
-    [...featured, ...villas].find((v) => v.images[0])?.images[0] ?? null;
+    sampleVillas.find((v) => v.images[0])?.images[0] ?? null;
   const heroImage = site.heroImage ?? showcaseImage;
 
   // Panelden girilen hero metni varsa sözlüktekinin yerine geçer; alt başlık

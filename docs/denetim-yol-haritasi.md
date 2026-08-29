@@ -254,6 +254,70 @@ eksik `updated_at` trigger'ları, `price_estimate >= 0` kısıtı.
 > ⚠️ İki `exclude` kısıtı mevcut veride çakışma varsa **sessizce atlanır**
 > (notice ile). Migration'ın sonundaki iki kontrol sorgusunu önce çalıştırın.
 
+### 5.9.6 — Sınırsız ölçek — ✅ kısmen (29.08.2026)
+
+**Kapsam değişikliği:** hedef 600 değil, **sınırsız** (2.000+ olabilir, işletmeye
+göre değişir). Faz 5.9 "600 villa" varsayımıyla yazılmıştı; bu bölüm o varsayımı
+kaldırır.
+
+**Ölçülen gerçek:** eski sitede **602 villa** var (sitemap'teki 680 URL'in
+hepsi tek tek açılıp sayıldı; 78'i statik sayfa).
+
+**Sessiz uçurum — ölçüldü:** PostgREST **1.000 satırda kırpıyor ve hata
+vermiyor.** `villa_images` tablosunda 1.102 satır varken sorgu 1.000 döndürdü.
+Yani katalog 1.000'i geçtiği an sınırsız sorgular eksik veri döndürmeye başlar
+ve hiçbir uyarı çıkmaz.
+
+| ✅ | İş | Etki |
+|---|---|---|
+| ✅ | **Ana sayfa artık tüm katalogu çekmiyor** | En kritik olan buydu: 1.000 villadan sonra ana sayfa sessizce eksik veri gösterecekti |
+| ✅ | `getRegionVillaCounts()` — sayımı **Postgres yapıyor** (gömülü `villas(count)`); dönen satır = bölge sayısı, villa sayısından bağımsız | Sayaçlar sınırsız ölçekte doğru |
+| ✅ | Sayaçlara **hiyerarşik toplama** eklendi | Denetimdeki "envanteri olan il 0 villa gösteriyor" hatası kapandı |
+| ✅ | `getFeaturedVillaCards(limit)` — SQL'de filtreli + limitli | |
+| ✅ | `getVillaCardsBySlugs()` — kategori satırları yalnızca gösterilecek slug'ları çekiyor | |
+
+**Hâlâ sınırsız olanlar (panel — 1.000 villayı geçmeden ele alınmalı):**
+
+| Sorgu | Yer | 2.000'de ne olur |
+|---|---|---|
+| `getVillaSlugs()` | `generateStaticParams` | Build'de 2.000 sayfa üretilir; öne çıkanlarla sınırlanıp gerisi `dynamicParams`'a bırakılmalı |
+| `getVillaPricingOptions()` | Manuel rezervasyon | Tüm villalar + sezonlar + bloklar tek payload'da; villa **arama** kutusuna dönüşmeli |
+| `getMultiCalendar()` | Takvim | 2.000 satır — performanstan önce **arayüz** kullanılamaz; bölge/arama filtresi + sayfalama şart |
+| `getVillaOptions()` | Açılır menüler | 2.000 seçenekli `<select>`; aranabilir combobox olmalı |
+
+Üçü de panel tarafı ve hepsi UI değişikliği istiyor (arama kutusu, sayfalama),
+o yüzden ayrı bir dalgaya bırakıldı.
+
+### 5.9.7 — Göç script'leri — ✅ TAMAM (29.08.2026)
+
+`scratch/` altındaki iki script `scripts/` altına, izlenen ve düzeltilmiş
+hâlleriyle taşındı: **`scripts/migrate-villas.mjs`** ve
+**`scripts/sync-villa-images.mjs`**. İkisi de varsayılan olarak `--dry-run`.
+
+| ✅ | Düzeltme |
+|---|---|
+| ✅ | Sitemap gerçek URL'den okunuyor (eskiden başka bir aracın geçici klasörüne sabitliydi) |
+| ✅ | Kalite kontrolü: aykırı fiyat (8x eşiği), boş açıklama, fotoğrafsız villa, şüpheli kapasite |
+| ✅ | Açıklama boşluk normalizasyonu |
+| ✅ | **Bölge üst bağlantısı**: yeni bölgeler `parent_id` ile açılıyor ve mevcut kök hataları raporlanıyor |
+| ✅ | İdempotent: DB'de olan slug atlanıyor, yarıda kalırsa devam ediyor |
+| ✅ | Görsel senkronu paralel + satır bazlı güncelleme (kaldığı yerden devam) + PostgREST sayfalaması |
+| ✅ | Villalar `draft` gelir; `description_en` artık Türkçenin kopyası değil, NULL |
+
+**Ölçülen tahmin:** ~602 villa × ~52 fotoğraf ≈ **29.000 görsel**.
+Villa kayıtları ~15 dk, görsel senkronu **~2–4 saat**.
+
+> ⚠ **Bugünkü katalogda acil bir durum var:** 21 villanın 20'sinde, toplam
+> **1.091 fotoğraf hâlâ eski sitede** duruyor (`storage_path` uzak URL).
+> Site düzgün görünüyor çünkü eski site ayakta ve `next.config.ts` onu
+> proxy'liyor. **Eski site kapanırsa bu fotoğraflar gider.**
+> Göçü beklemez, bugün çalıştırılabilir:
+> `node --env-file=.env.local scripts/sync-villa-images.mjs --write`
+
+> ⚠ **Bölge ağacında iki kök hatası:** "Gökseki" (2 villa) ve "Çukurbağ"
+> (4 villa) hiçbir ilin altında değil. Bu yüzden Kaş kartı 21 yerine **15**
+> gösteriyor. Panelden Kaş altına alınmalı.
+
 ### 5.9.5 — Göç kapısı kontrol listesi (G1)
 
 600 villa aktarılmadan **önce** hepsi ✅ olmalı:
