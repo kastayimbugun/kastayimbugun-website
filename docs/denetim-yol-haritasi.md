@@ -259,11 +259,14 @@ eksik `updated_at` trigger'ları, `price_estimate >= 0` kısıtı.
 600 villa aktarılmadan **önce** hepsi ✅ olmalı:
 
 - ✅ Faz 5.8 tamamlandı
-- ⬜ **Supabase Pro + PITR açık** — *yalnızca panelden yapılabilir, kod tarafı yok*
-- ✅ 5.9.1 ve 5.9.2 tamamlandı
-- ⬜ `0022`–`0025` migration'ları production'da çalıştırıldı
-- ⬜ `0024` sınırlı izinli test personeliyle doğrulandı (modül RLS)
-- ⬜ `0008_price_rules` production'da çalıştırıldı *(`PLAN.md` Faz 5.7'den açık kalmıştı)*
+- ✅ Kod production'a deploy edildi (29.08.2026)
+- ✅ **`0021`–`0025` migration'ları production'da çalıştırıldı** (29.08.2026)
+      — son kontrol 13/13 ✅; iki `exclude` kısıtı **gerçekten eklendi**, atlanmadı
+- ✅ `0008_price_rules` zaten uygulanmışmış (ön kontrol öyle gösterdi)
+- ⬜ **Supabase Pro + PITR açık** — *yalnızca Supabase panelinden, kod tarafı yok*
+- ⬜ `0024` sınırlı izinli test personeliyle doğrulanacak *(şu an sistemde
+      yalnızca 1 admin var; modül izinleri gerçek bir editörle hiç denenmedi)*
+- ⬜ "Allow new users to sign up" kapalı mı teyit edilecek
 - ⬜ Göç script'i aykırı fiyat denetimi yapıyor *(bugün "₺10.000 – ₺125.000" gösteren villa var)*
 - ⬜ Göç script'i açıklama boşluklarını normalize ediyor
 - ⬜ Yinelenen bölge kayıtları temizlendi *("İslamlar" iki kez)*
@@ -427,7 +430,7 @@ filtrede kullanılan fiyat aynı.
 
 | ⬜ | Değişken | Not |
 |---|---|---|
-| ⬜ | `TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | **Faz 5.8.4 bitmeden tanımlama** — widget yoksa tüm talepler reddedilir |
+| ⬜ | `TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | **Karar (29.08.2026): yayına kadar ertelendi.** Gerekçe: site geçici Vercel adresinde, indekslenmiyor, bot trafiği yok; IP hız sınırı (0023) devrede — rezervasyon 8/saat, başvuru 3/saat. Captcha ayrıca huniye sürtünme ekliyor. **Gerçek domain canlıya çıkmadan ÖNCE eklenmeli**: başvuru formu istek başına ~9 MB fotoğraf kabul ediyor ve her kayıt Resend e-postası tetikliyor; hız sınırı dönen proxy'lerle aşılır.<br>⚠️ İki anahtarı **aynı anda** ekleyin. Cloudflare Turnstile'da domain olarak Vercel production adresini yazın; **env'leri yalnızca Production ortamına verin** — preview URL'leri farklı host olduğu için Turnstile token vermez ve preview formları kırılır. |
 | ⬜ | `NEXT_PUBLIC_WHATSAPP_NUMBER` | Faz 6.5.2'de kullanılacak |
 | ⬜ | `NEXT_PUBLIC_GA_ID` | Ölçüm — şu an hiç ölçüm yok |
 | ⬜ | `NEXT_PUBLIC_SITE_URL` | `metadataBase` buna bağlı; yanlışsa OG görselleri `localhost`'a düşer |
