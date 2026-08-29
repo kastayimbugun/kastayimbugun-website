@@ -9,13 +9,17 @@ import "server-only";
  * fiilen kapalıydı — üstelik "yalnızca geliştirme" diyen yorum üretimde de
  * geçerliydi.
  *
- * Artık üretimde eksik anahtar bir **yapılandırma hatasıdır, muafiyet değil**.
+ * Kural: **yapılandırılmışsa zorunlu, yapılandırılmamışsa yok.**
+ *   - Anahtar YOK  → captcha atlanır (uyarı loglanır). Spam freni olarak IP
+ *     hız sınırı devrede kalır (rateLimit.ts + migration 0023).
+ *   - Anahtar VAR  → token zorunlu; yoksa veya doğrulanmazsa reddedilir.
+ *     Ağ hatasında da reddedilir (fail-closed).
  *
- * ⚠️ Anahtar çifti birlikte tanımlanmalı:
- *   - `TURNSTILE_SECRET_KEY`         (sunucu, bu dosya)
+ * ⚠️ Anahtar çifti BİRLİKTE tanımlanmalı:
+ *   - `TURNSTILE_SECRET_KEY`           (sunucu, bu dosya)
  *   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (istemci, TurnstileWidget)
- * Yalnızca biri tanımlanırsa üretimde tüm gönderimler reddedilir. Bu bilinçli:
- * sessizce korumasız çalışmaktansa gürültülü şekilde durmak yeğdir.
+ * Yalnızca sunucu anahtarı tanımlanırsa istemci token üretmez ve TÜM gerçek
+ * gönderimler reddedilir. İkisini aynı anda ekleyin.
  */
 export async function verifyTurnstile(
   token: string,
@@ -24,18 +28,25 @@ export async function verifyTurnstile(
   const secret = process.env.TURNSTILE_SECRET_KEY;
 
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error(
-        "TURNSTILE_SECRET_KEY tanımlı değil — üretimde form gönderimi reddedildi."
-      );
-      return false;
-    }
+    // Turnstile HİÇ yapılandırılmamış: anahtar yok demek "kurulmamış" demek,
+    // "doğrulama başarısız" demek değil. Burada reddetmek meşru rezervasyon
+    // taleplerini kaybettirir — nitekim 29.08.2026'da tam bunu yaptı.
+    //
+    // Bu dalın güvenli olmasının nedeni, spam frenininin TEK başına Turnstile
+    // olmaması: IP başına hız sınırı (lib/security/rateLimit.ts + migration
+    // 0023) her koşulda devrede ve rezervasyonda 8/saat, başvuruda 3/saat.
+    //
+    // Anahtar tanımlandığı an aşağıdaki kod SIKI davranır: token yoksa veya
+    // doğrulanmazsa reddeder. Yani "yapılandırılmışsa zorunlu, değilse yok".
     console.warn(
-      "TURNSTILE_SECRET_KEY yok — spam koruması yalnızca GELİŞTİRMEDE atlanıyor."
+      "TURNSTILE_SECRET_KEY tanımlı değil — captcha atlanıyor. " +
+        "Spam koruması şu an yalnızca IP hız sınırı. " +
+        "Vercel'e TURNSTILE_SECRET_KEY + NEXT_PUBLIC_TURNSTILE_SITE_KEY ekleyin."
     );
     return true;
   }
 
+  // Anahtar tanımlı: bundan sonrası sıkı. Token yoksa geçiş yok.
   if (!token) return false;
 
   try {
