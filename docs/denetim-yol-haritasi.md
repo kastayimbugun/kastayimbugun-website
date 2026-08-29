@@ -274,8 +274,33 @@ eksik `updated_at` trigger'ları, `price_estimate >= 0` kısıtı.
 - ⬜ Ölü görsel URL'leri temizlendi *(villa detayında 4 fotoğraf eski siteye işaret ediyor, 404)*
 - ⬜ `picsum.photos` / `images.unsplash.com` referansları ve `next.config.ts` satırları silindi
 
-**Bitti sayılır:** ✅ 600 villalık test göçü hariç tüm kod tarafı hazır; kalan
-maddeler veri ve Supabase panel işlemleri.
+**Bitti sayılır:** ✅ Kod tarafı hazır ve canlıda. Kalan maddeler veri ve Supabase
+panel işlemleri.
+
+> **Zamanlama kararı (29.08.2026):** 600 villa **şimdi değil, yayından hemen önce**
+> aktarılacak. G1 kapısının kod tarafı önden bitti; göç ne zaman yapılırsa altyapı
+> hazır. Kalan G1 maddeleri (PITR, veri temizliği) göç gününe kadar tamamlanmalı.
+
+### Göç script'i — bilinen sorunlar (`scratch/migrate_batch.js`)
+
+Göç gününden **önce** düzeltilmesi gerekenler. Denetim sırasında tespit edildi:
+
+| # | Sorun | Etki |
+|---|---|---|
+| 1 | `storage_path` alanına **eski sitenin URL'si** yazılıyor (`migrate_batch.js:330`); gerçek yükleme ayrı script'te (`sync_images_to_storage.js`) | İki aşamalı süreç. İkinci aşama tamamlanmazsa görseller eski siteye bağlı kalır — **bugün 21 villada 4 ölü URL bunun kalıntısı** |
+| 2 | Sitemap kaynağı başka bir AI aracının geçici klasörüne sabitlenmiş (`migrate_batch.js:217`) | Dosya silinirse script hiç çalışmaz. Gerçek sitemap URL'inden okumalı |
+| 3 | Hiçbir doğrulama yok (`zod`/`safeParse` = 0 kullanım), `service_role` ile doğrudan yazıyor | Panelin tüm doğrulamaları atlanıyor. **Aykırı fiyat (₺10.000–₺125.000), yinelenen bölge, temizlenmemiş açıklama boşlukları buradan geliyor** |
+| 4 | Scrape döngüsünde gecikme yok, sıralı `fetch` | 600 istek; kendi eski siteni yorabilir |
+
+**Süre tahmini:** villa kayıtlarının kendisi hızlı (~15–30 dk). Asıl uzun iş
+**görsel senkronu**: 600 villa × ~30 fotoğraf ≈ **18.000 görsel** indirilip
+işlenip Storage'a yüklenecek. Sıralı çalışırsa saatler sürer; paralelleştirme
+ve kaldığı yerden devam edebilme (idempotent) eklenmeli.
+
+**Öneri:** göçten önce script'e (a) fiyat aykırı değer denetimi, (b) açıklama
+boşluk normalizasyonu, (c) bölge tekilleştirme, (d) gerçek tesis kodu alanı
+eklenmeli — aksi halde 600 villa aynı veri sorunlarıyla gelir ve panelden tek
+tek düzeltmek gerekir.
 
 ---
 
