@@ -21,7 +21,11 @@ import CategorySection from "@/components/CategorySection";
 import CategoryBrowser from "@/components/CategoryBrowser";
 import AdBanner from "@/components/AdBanner";
 import { useI18n } from "@/lib/i18n";
-import type { Region, VillaCardData } from "@/lib/data/villas";
+import type {
+  Region,
+  VillaCardData,
+  VillaFacetCounts,
+} from "@/lib/data/villas";
 import type { Category } from "@/lib/data/categories";
 import type { SiteSettings } from "@/lib/data/site";
 import {
@@ -37,6 +41,7 @@ export default function HomeClient({
   regions,
   categories,
   site,
+  counts,
 }: {
   /** Öne çıkan villalar — SQL'de filtreli ve limitli. */
   featured: VillaCardData[];
@@ -47,6 +52,8 @@ export default function HomeClient({
   regions: Region[];
   categories: Category[];
   site: SiteSettings;
+  /** Rozet ve kutucuk sayıları — Postgres saydı, sabit yazılı değil. */
+  counts: VillaFacetCounts;
 }) {
   const { t, lang } = useI18n();
 
@@ -199,7 +206,8 @@ export default function HomeClient({
     if (s.key === "banner") return <Fragment key="banner">{bannerSection}</Fragment>;
     if (s.key === "featured")
       return <Fragment key="featured">{featuredSection}</Fragment>;
-    if (s.key === "shortStay") return <ShortStayDeals key="shortStay" />;
+    if (s.key === "shortStay")
+      return <ShortStayDeals key="shortStay" counts={counts} />;
     if (s.key === "regions")
       return regionsSection ? (
         <Fragment key="regions">{regionsSection}</Fragment>
@@ -252,7 +260,7 @@ export default function HomeClient({
           </div>
 
           <div className="mt-8 animate-fade-up">
-            <SearchBar regions={regions} />
+            <SearchBar regions={regions} counts={counts} />
           </div>
         </div>
       </section>

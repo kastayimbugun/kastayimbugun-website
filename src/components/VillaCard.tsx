@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { VillaCardData } from "@/lib/data/villas";
 import { useI18n } from "@/lib/i18n";
+import { useFavorites } from "@/lib/useFavorites";
 import { formatPrice } from "@/lib/format";
 import { villaCode, priceRange } from "@/lib/villaUtils";
 
@@ -47,7 +48,9 @@ export default function VillaCard({
   eager?: boolean;
 }) {
   const { t, lang } = useI18n();
-  const [fav, setFav] = useState(false);
+  // Kalp eskiden `useState(false)` idi: villaya girip geri dönünce boşalıyordu.
+  const { has, toggle } = useFavorites();
+  const fav = has(villa.slug);
 
   // Kart görseli artık mini galeri: ok + noktalarla ilk birkaç fotoğraf
   // gezilebilir. Villa detayına gitmeden (kart bir Link) çalışması için
@@ -256,10 +259,11 @@ export default function VillaCard({
         <button
           onClick={(e) => {
             e.preventDefault();
-            setFav((v) => !v);
+            toggle(villa.slug);
           }}
           className="absolute right-3 top-3 z-10 rounded-full bg-white/25 p-2 backdrop-blur transition hover:bg-white/40"
-          aria-label="Favorite"
+          aria-label={fav ? t("fav.remove") : t("fav.add")}
+          aria-pressed={fav}
         >
           <Heart
             className={`h-5 w-5 ${

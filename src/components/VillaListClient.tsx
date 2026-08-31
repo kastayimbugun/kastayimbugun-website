@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { SlidersHorizontal, X, Search } from "lucide-react";
+import { SlidersHorizontal, X, Search, SearchX } from "lucide-react";
 import VillaCard from "./VillaCard";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
@@ -85,7 +85,18 @@ export default function VillaListClient({
   const applyFilters = (patch: Record<string, string | number | string[] | undefined>) => {
     const current: Record<string, string | number | string[] | undefined> = {
       bolge: region || undefined,
+      // Panelde karşılığı olmayan ama URL'de yaşayan parametreler. Burada
+      // yeniden yazılmazlarsa kullanıcı HERHANGİ bir filtreye dokunduğunda
+      // sessizce düşerlerdi: ana sayfadan "7–12 Eylül, 4 kişi" arayıp sonra
+      // "Özel Havuz"u işaretleyen kişi tarihlerini kaybediyordu; "2 gece"
+      // kutucuğuyla gelen de gece filtresini.
       kategori: query.kategori,
+      giris: query.giris,
+      cikis: query.cikis,
+      gece: query.gece,
+      etiket: query.etiket,
+      firsat: query.firsat ? "1" : undefined,
+      oneCikan: query.oneCikan ? "1" : undefined,
       q: q || undefined,
       kisi: minGuests || undefined,
       yatak: minBeds || undefined,
@@ -181,6 +192,111 @@ export default function VillaListClient({
 
   // Sonuçlar sunucudan hazır gelir; istemcide filtreleme/sıralama YOK.
   const results = items;
+
+  /**
+   * 0 sonuç ekranı için: hangi filtreler daralttı ve her biri tek tıkla nasıl
+   * kaldırılır. Eskiden burada yalnızca "Sonuç bulunamadı" yazıyordu —
+   * kullanıcı hangi filtrenin engellediğini bilmediği için ya hepsini
+   * temizliyor ya da siteyi terk ediyordu.
+   */
+  /**
+   * 0 sonuç ekranı için: hangi filtreler daralttı. Eskiden burada yalnızca
+   * "Sonuç bulunamadı" yazıyordu — kullanıcı hangi filtrenin engellediğini
+   * bilmediği için ya hepsini temizliyor ya da siteyi terk ediyordu.
+   *
+   * Liste yalnızca VERİ taşır; temizleme işi `clearFilter` içinde, tıklama
+   * anında yapılır. Render sırasında setter'ları kapanışa almak, debounce
+   * zamanlayıcısının ref'ini render sırasında okumak anlamına geliyordu.
+   */
+  type FilterKey =
+    | { kind: "bolge" }
+    | { kind: "q" }
+    | { kind: "kisi" }
+    | { kind: "yatak" }
+    | { kind: "fiyat" }
+    | { kind: "ozellik"; amenity: AmenityKey }
+    /** URL'de yaşayan, filtre panelinde karşılığı olmayanlar. */
+    | { kind: "url"; param: "gece" | "etiket" | "firsat" | "oneCikan" };
+
+  const activeFilters: { id: string; label: string; f: FilterKey }[] = [];
+  if (region)
+    activeFilters.push({
+      id: "bolge",
+      label: regions.find((r) => r.slug === region)?.name ?? region,
+      f: { kind: "bolge" },
+    });
+  if (q) activeFilters.push({ id: "q", label: `"${q}"`, f: { kind: "q" } });
+  if (minGuests)
+    activeFilters.push({
+      id: "kisi",
+      label: `${minGuests}+ ${t("filter.capacity")}`,
+      f: { kind: "kisi" },
+    });
+  if (minBeds)
+    activeFilters.push({
+      id: "yatak",
+      label: `${minBeds}+ ${t("filter.bedrooms")}`,
+      f: { kind: "yatak" },
+    });
+  if (minPrice > 0 || maxPrice < priceCeiling)
+    activeFilters.push({
+      id: "fiyat",
+      label: `${formatPrice(minPrice, lang)} – ${formatPrice(maxPrice, lang)}`,
+      f: { kind: "fiyat" },
+    });
+  for (const a of amenities)
+    activeFilters.push({
+      id: `ozellik-${a}`,
+      label: t(`amenity.${a}`),
+      f: { kind: "ozellik", amenity: a },
+    });
+  if (query.gece)
+    activeFilters.push({
+      id: "gece",
+      label: `${query.gece} ${t("deals.nightUnit")}`,
+      f: { kind: "url", param: "gece" },
+    });
+  if (query.etiket)
+    activeFilters.push({
+      id: "etiket",
+      label: t("tabs.deals"),
+      f: { kind: "url", param: "etiket" },
+    });
+  if (query.firsat)
+    activeFilters.push({
+      id: "firsat",
+      label: t("tabs.campaign"),
+      f: { kind: "url", param: "firsat" },
+    });
+  if (query.oneCikan)
+    activeFilters.push({
+      id: "oneCikan",
+      label: t("list.sortFeatured"),
+      f: { kind: "url", param: "oneCikan" },
+    });
+
+  const clearFilter = (f: FilterKey) => {
+    switch (f.kind) {
+      case "bolge":
+        return setRegion("");
+      case "q":
+        return setQ("");
+      case "kisi":
+        return setMinGuests(0);
+      case "yatak":
+        return setMinBeds(0);
+      case "ozellik":
+        return toggleAmenity(f.amenity);
+      case "fiyat":
+        setMinPriceLocal(0);
+        setMaxPriceLocal(priceCeiling);
+        applyFilters({ minFiyat: undefined, maxFiyat: undefined });
+        return;
+      case "url":
+        applyFilters({ [f.param]: undefined });
+        return;
+    }
+  };
 
   // Kartlara taşınacak arama bağlamı: tarih ve kişi sayısı detayda hazır gelsin.
   const cardContext = (() => {
@@ -458,8 +574,45 @@ export default function VillaListClient({
           </div>
 
           {results.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-sand-200 bg-sand-50 py-20 text-center text-brand-900/60">
-              {t("list.noResults")}
+            <div className="rounded-2xl border border-dashed border-sand-200 bg-sand-50 px-6 py-16 text-center">
+              <SearchX className="mx-auto h-10 w-10 text-brand-900/25" />
+              <p className="mt-4 text-lg font-bold text-brand-950">
+                {t("list.noResults")}
+              </p>
+
+              {activeFilters.length > 0 ? (
+                <>
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-brand-900/60">
+                    {t("list.noResultsHint")}
+                  </p>
+                  {/* Her filtre tek tıkla kalkar — kullanıcı hangi kriterin
+                      daralttığını deneyerek bulabilsin. */}
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    {activeFilters.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => clearFilter(f.f)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-sand-300 bg-white px-3 py-1.5 text-sm font-semibold text-brand-800 transition hover:border-rose-300 hover:text-rose-600"
+                      >
+                        {f.label}
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={clear}
+                    className="mt-5 inline-flex items-center justify-center rounded-full bg-sun-500 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sun-600"
+                  >
+                    {t("list.clearAll")}
+                  </button>
+                </>
+              ) : (
+                /* Filtre yokken 0 sonuç = katalog gerçekten boş; temizlenecek
+                   bir şey önermek kullanıcıyı boşuna uğraştırır. */
+                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-brand-900/60">
+                  {t("list.noResultsEmpty")}
+                </p>
+              )}
             </div>
           ) : (
             <>

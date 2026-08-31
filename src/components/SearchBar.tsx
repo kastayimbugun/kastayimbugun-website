@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { Region } from "@/lib/data/villas";
+import type { VillaFacetCounts } from "@/lib/data/villas";
 import GuestSelector, { type GuestCounts } from "./GuestSelector";
 import DateRangePicker from "./DateRangePicker";
 
@@ -42,7 +43,13 @@ function Segment({
   );
 }
 
-export default function SearchBar({ regions }: { regions: Region[] }) {
+export default function SearchBar({
+  regions,
+  counts,
+}: {
+  regions: Region[];
+  counts: VillaFacetCounts;
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const [mode, setMode] = useState<"region" | "name">("region");
@@ -146,9 +153,19 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
             {t("tabs.main")}
           </button>
 
-          {/* 2026 Fırsatları — erken rezervasyon */}
+          {/*
+            "2026 Fırsatları" ve "Kampanyalı Villalar" ayrı birer filtre gibi
+            duruyordu ama ikisi de düz `/villalar`'a atıyordu — rozetleriyle
+            birlikte üç sekme aynı sayfayı açıyordu.
+
+            Artık gerçek filtreler: fırsat sekmesi "erken rezervasyon" etiketli
+            villalara, kampanya sekmesi flaş indirimi olanlara gider. Sayısı 0
+            olan sekme HİÇ render edilmez — boş listeye götüren bir rozet,
+            olmayan bir rozetten kötüdür.
+          */}
+          {counts.erken > 0 && (
           <button
-            onClick={() => router.push("/villalar")}
+            onClick={() => router.push("/villalar?etiket=earlyBooking")}
             className="relative flex shrink-0 items-center gap-1.5 rounded-t-xl bg-brand-500 px-3 py-2.5 text-xs font-bold text-brand-950 shadow-[0_-6px_16px_-8px_rgba(0,0,0,0.3)] transition hover:bg-brand-400 sm:gap-2 sm:px-5 sm:py-3 sm:text-sm"
           >
             <span className="absolute -top-2 left-3 rounded bg-brand-950 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
@@ -156,11 +173,16 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
             </span>
             <Gem className="h-4 w-4" />
             {t("tabs.deals")}
+            <span className="rounded-full bg-brand-950/15 px-1.5 py-0.5 text-[10px] font-extrabold">
+              {counts.erken}
+            </span>
           </button>
+          )}
 
-          {/* Kampanyalı Villalar */}
+          {/* Kampanyalı Villalar — flaş indirimi olanlar */}
+          {counts.firsat > 0 && (
           <button
-            onClick={() => router.push("/villalar")}
+            onClick={() => router.push("/villalar?firsat=1")}
             className="relative flex shrink-0 items-center gap-1.5 rounded-t-xl bg-brand-950/80 px-3 py-2.5 text-xs font-bold text-white backdrop-blur transition hover:bg-brand-950 sm:gap-2 sm:px-5 sm:py-3 sm:text-sm"
           >
             <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded bg-emerald-500 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white shadow">
@@ -169,7 +191,11 @@ export default function SearchBar({ regions }: { regions: Region[] }) {
             <Star className="h-4 w-4 fill-brand-300 text-brand-300" />
             <span className="sm:hidden">{t("tabs.campaignShort")}</span>
             <span className="hidden sm:inline">{t("tabs.campaign")}</span>
+            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-extrabold">
+              {counts.firsat}
+            </span>
           </button>
+          )}
 
           {/* Villa Adı / Kodu ile Ara */}
           <button

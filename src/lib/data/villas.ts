@@ -525,6 +525,14 @@ export interface VillaListQuery {
   yatak?: number;
   minFiyat?: number;
   maxFiyat?: number;
+  /** Yalnızca flaş indirimi olan villalar. */
+  firsat?: boolean;
+  /** Yalnızca öne çıkan villalar. */
+  oneCikan?: boolean;
+  /** N gecelik konaklamayı kabul eden villalar (min_nights ≤ N). */
+  gece?: number;
+  /** Fırsat etiketi: erken rezervasyon / son dakika / kısa konaklama. */
+  etiket?: NonNullable<Villa["dealTag"]>;
   ozellik?: AmenityKey[];
   sirala?: VillaSort;
   sayfa?: number;
@@ -629,6 +637,10 @@ export async function getVillaCardPage(
   if (f.minFiyat) q = q.gte("base_price", f.minFiyat);
   if (f.maxFiyat) q = q.lte("base_price", f.maxFiyat);
   if (f.ozellik?.length) q = q.contains("amenities", f.ozellik);
+  if (f.firsat) q = q.gt("discount_percent", 0);
+  if (f.oneCikan) q = q.eq("featured", true);
+  if (f.gece) q = q.lte("min_nights", f.gece);
+  if (f.etiket) q = q.eq("deal_tag", f.etiket);
 
   q =
     f.sirala === "priceAsc"
@@ -726,4 +738,55 @@ export async function getRegions(): Promise<Region[]> {
       heroImage: imageUrl(r.hero_image),
     };
   });
+}
+
+/**
+ * Ana sayfadaki rozet ve kutucuk sayıları.
+ *
+ * Bu sayılar SABİT YAZILIYDI: `ShortStayDeals` "2 gece → 39 villa, 3 gece → 90
+ * villa …" diyordu ve ana sayfada "242+ villa müsait" yazıyordu. Sitede o gün
+ * 21 villa vardı. Arama çubuğundaki "Fırsatlar"/"Kampanya" sekmeleri de rozet
+ * taşıyordu ama arkalarında hiçbir filtre yoktu — ikisi de düz `/villalar`'a
+ * gidiyordu.
+ *
+ * Satır ÇEKİLMEZ (`head: true`): yalnızca Postgres'in saydığı rakam döner.
+ * Katalog kaç bin villaya çıkarsa çıksın maliyet aynı kalır ve PostgREST'in
+ * 1.000 satırlık sessiz kırpması bu sorguları hiç ilgilendirmez.
+ */
+export interface VillaFacetCounts {
+  /** Flaş indirimi olan villa sayısı. */
+  firsat: number;
+  /** Öne çıkan villa sayısı. */
+  oneCikan: number;
+  /** "Erken rezervasyon" etiketli villa sayısı. */
+  erken: number;
+  /** Gece sayısına göre: `{ 2: 14, 3: 21, ... }` */
+  gece: Record<number, number>;
+  /** Yayındaki toplam villa. */
+  toplam: number;
+}
+
+export async function getVillaFacetCounts(): Promise<VillaFacetCounts> {
+  const base = () =>
+    supabaseServer()
+      .from("villas")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "published");
+
+  const geceler = [2, 3, 4, 5];
+  const [firsat, oneCikan, erken, toplam, ...geceSonuc] = await Promise.all([
+    base().gt("discount_percent", 0),
+    base().eq("featured", true),
+    base().eq("deal_tag", "earlyBooking"),
+    base(),
+    ...geceler.map((n) => base().lte("min_nights", n)),
+  ]);
+
+  return {
+    firsat: firsat.count ?? 0,
+    oneCikan: oneCikan.count ?? 0,
+    erken: erken.count ?? 0,
+    toplam: toplam.count ?? 0,
+    gece: Object.fromEntries(geceler.map((n, i) => [n, geceSonuc[i].count ?? 0])),
+  };
 }

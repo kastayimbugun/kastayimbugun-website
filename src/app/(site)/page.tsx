@@ -4,6 +4,7 @@ import {
   getRegionVillaCounts,
   getFeaturedVillaCards,
   getVillaCardsBySlugs,
+  getVillaFacetCounts,
 } from "@/lib/data/villas";
 import { getCategories } from "@/lib/data/categories";
 import { getSiteSettings } from "@/lib/data/site";
@@ -25,13 +26,16 @@ export default async function Home() {
   //   · bölge sayaçları → Postgres sayıyor, dönen satır = bölge sayısı
   //   · öne çıkanlar    → SQL'de filtreli + limitli
   //   · kategori satırları → yalnızca gösterilecek slug'lar
-  const [regions, categories, site, regionCounts, featured] = await Promise.all([
-    getRegions(),
-    getCategories(),
-    getSiteSettings(),
-    getRegionVillaCounts(),
-    getFeaturedVillaCards(PER_CATEGORY),
-  ]);
+  //   · rozet/kutucuk sayaçları → Postgres sayıyor, satır hiç dönmüyor
+  const [regions, categories, site, regionCounts, featured, counts] =
+    await Promise.all([
+      getRegions(),
+      getCategories(),
+      getSiteSettings(),
+      getRegionVillaCounts(),
+      getFeaturedVillaCards(PER_CATEGORY),
+      getVillaFacetCounts(),
+    ]);
 
   // Ana sayfada gösterilecek kategorilerin villalarını tek sorguda topla.
   const categorySlugs = categories
@@ -47,6 +51,7 @@ export default async function Home() {
       regions={regions}
       categories={categories}
       site={site}
+      counts={counts}
     />
   );
 }

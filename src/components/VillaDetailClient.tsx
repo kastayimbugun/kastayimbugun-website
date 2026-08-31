@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import {
   Star,
   MapPin,
+  ArrowUpRight,
   Users,
   BedDouble,
   Bath,
@@ -514,25 +515,44 @@ export default function VillaDetailClient({
             <h2 className="text-xl font-bold text-brand-950">
               {t("detail.location")}
             </h2>
-            <div className="relative mt-4 flex h-56 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-brand-100 to-brand-50 ring-1 ring-sand-200">
-              <div
-                className="absolute inset-0 opacity-40"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(#f0d5a6 1px, transparent 1px), linear-gradient(90deg, #f0d5a6 1px, transparent 1px)",
-                  backgroundSize: "32px 32px",
-                }}
-              />
-              <div className="relative text-center">
-                <MapPin className="mx-auto h-10 w-10 text-sun-500" />
-                <div className="mt-2 font-bold text-brand-900">
-                  {villa.region}, {villa.province}
-                </div>
-                {villa.distanceToSea > 0 && (
-                  <div className="text-sm text-brand-900/60">
-                    {t("card.toSea")}: {villa.distanceToSea} m
+            {/*
+              Burada 224 px'lik bir kutu vardı: ızgara çizgili arka plan +
+              ortada bir iğne. Harita DEĞİLDİ — CSS gradyanıydı. Kullanıcı
+              yüklenmemiş bir harita sandığı için bekliyor, tıklıyor, bir şey
+              olmuyordu. Villanın koordinatı da veride yok (gerçek harita
+              PLAN.md'de sonraki faz), o yüzden harita taklidi yerine elde
+              GERÇEKTEN olan bilgi gösteriliyor: bölge, denize uzaklık ve
+              bölgeyi haritada açan bir bağlantı.
+
+              Bağlantı bilerek BÖLGEYİ arıyor, villayı değil; villanın kesin
+              konumu ne veride var ne de rezervasyon öncesi paylaşılmalı.
+            */}
+            <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50 p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-sun-500 shadow-sm">
+                  <MapPin className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="font-bold text-brand-950">
+                    {villa.region}, {villa.province}
                   </div>
-                )}
+                  {villa.distanceToSea > 0 && (
+                    <div className="mt-0.5 text-sm text-brand-900/60">
+                      {t("card.toSea")}: {villa.distanceToSea} m
+                    </div>
+                  )}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      `${villa.region}, ${villa.province}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
+                  >
+                    {t("detail.viewArea")}
+                    <ArrowUpRight className="h-4 w-4" />
+                  </a>
+                </div>
               </div>
             </div>
           </section>

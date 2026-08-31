@@ -3,17 +3,25 @@
 import Link from "next/link";
 import { Moon, CalendarClock, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import type { VillaFacetCounts } from "@/lib/data/villas";
 
-const deals = [
-  { nights: 2, count: 39 },
-  { nights: 3, count: 90 },
-  { nights: 4, count: 69 },
-  { nights: 5, count: 44 },
-];
-
-export default function ShortStayDeals() {
+/**
+  * Sayılar SABİT YAZILIYDI: 2→39, 3→90, 4→69, 5→44 villa, başlıkta "242+ villa
+  * müsait". Sitede o gün 21 villa vardı. Kutucuklar da `/villalar?stay=N`'e
+  * gidiyordu ama `stay` diye bir parametre hiç okunmuyordu — dördü de aynı
+  * filtresiz listeyi açıyordu.
+  *
+  * Artık sayılar `getVillaFacetCounts()`ten (Postgres sayıyor) ve link
+  * `?gece=N` gerçek bir filtre: minimum konaklaması N geceyi aşmayan villalar.
+  */
+export default function ShortStayDeals({ counts }: { counts: VillaFacetCounts }) {
   const { t, lang } = useI18n();
-  const total = deals.reduce((s, d) => s + d.count, 0);
+  const deals = [2, 3, 4, 5].map((nights) => ({
+    nights,
+    count: counts.gece[nights] ?? 0,
+  }));
+  // Başlıktaki rakam: en kısa konaklamayı (2 gece) kabul eden villa sayısı.
+  const total = counts.gece[2] ?? 0;
   const monthName = new Intl.DateTimeFormat(
     lang === "tr" ? "tr-TR" : "en-US",
     { month: "long" }
@@ -44,7 +52,7 @@ export default function ShortStayDeals() {
             </span>
             <span className="text-brand-900/40">·</span>
             <span className="text-brand-900/60">
-              {total}+ {t("deals.villaCount")} {t("deals.available")}
+              {total} {t("deals.available")}
             </span>
           </div>
         </div>
@@ -63,7 +71,7 @@ export default function ShortStayDeals() {
         {deals.map((d) => (
           <Link
             key={d.nights}
-            href={`/villalar?stay=${d.nights}`}
+            href={`/villalar?gece=${d.nights}`}
             className="group relative overflow-hidden rounded-2xl border border-sand-200 bg-white p-5 transition-all duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-xl hover:shadow-brand-900/10"
           >
             {/* Hover gradient fill */}

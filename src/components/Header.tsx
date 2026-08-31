@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Heart, Globe, User, Menu, X, ShieldCheck } from "lucide-react";
 import Logo from "./Logo";
 import { useI18n, type Lang } from "@/lib/i18n";
+import { useFavorites } from "@/lib/useFavorites";
 import {
   DEFAULT_HEADER_CONFIG,
   type HeaderConfig,
@@ -30,7 +31,8 @@ export default function Header({
 }: {
   config?: HeaderConfig;
 }) {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
+  const { count: favCount } = useFavorites();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -97,9 +99,21 @@ export default function Header({
 
           <div className="hidden items-center gap-1 md:flex">
             <LangSwitch />
-            <button className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-brand-800 hover:bg-brand-50 transition">
-              <Heart className="h-4 w-4" />
-            </button>
+            {/* Eskiden `onClick`'i bile olmayan bir düğmeydi. */}
+            <Link
+              href="/favoriler"
+              aria-label={t("fav.title")}
+              className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-brand-800 transition hover:bg-brand-50"
+            >
+              <Heart
+                className={`h-4 w-4 ${favCount > 0 ? "fill-rose-500 text-rose-500" : ""}`}
+              />
+              {favCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                  {favCount}
+                </span>
+              )}
+            </Link>
             {cta.enabled && (
               <Link
                 href={cta.href}
