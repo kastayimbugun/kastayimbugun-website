@@ -327,7 +327,14 @@ Villa kayıtları ~15 dk, görsel senkronu **~2–4 saat**.
 - ✅ **`0021`–`0025` migration'ları production'da çalıştırıldı** (29.08.2026)
       — son kontrol 13/13 ✅; iki `exclude` kısıtı **gerçekten eklendi**, atlanmadı
 - ✅ `0008_price_rules` zaten uygulanmışmış (ön kontrol öyle gösterdi)
-- ⬜ **Supabase Pro + PITR açık** — *yalnızca Supabase panelinden, kod tarafı yok*
+- ⬜ **Supabase Pro + PITR** — **Karar (29.08.2026): şimdilik ERTELENDİ.**
+      Gerekçe: bugün kaybedilecek benzersiz veri yok — katalogdaki villalar eski
+      siteden geliyor ve `migrate-villas.mjs` idempotent, tekrar çekilebilir.
+      **Gerçek sınır 600 villa göçü DEĞİL, formdan ilk gerçek talebin düştüğü an:**
+      müşteri adı/telefonu/tarihleri ve görüşme notlarının başka kaynağı yok,
+      yeniden üretilemez. O noktadan önce Pro + günlük yedek açılmalı.
+      Ara çözüm (ücretsiz planda da çalışır): riskli işlemlerden önce elle
+      `npx supabase db dump --db-url "…" -f yedek.sql`
 - ⬜ `0024` sınırlı izinli test personeliyle doğrulanacak *(şu an sistemde
       yalnızca 1 admin var; modül izinleri gerçek bir editörle hiç denenmedi)*
 - ⬜ "Allow new users to sign up" kapalı mı teyit edilecek
