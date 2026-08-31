@@ -217,6 +217,10 @@ export default function ManualBookingForm({
             <AvailabilityCalendar
               bookedRanges={villa.bookedRanges}
               seasons={villa.seasons}
+              // Takvimdeki gecelikler "Önerilen tutar" ile aynı kurallardan
+              // geçsin; yoksa personel takvimde başka, önerıde başka rakam görür.
+              discountPercent={villa.discountPercent ?? undefined}
+              weekendPremiumPercent={villa.weekendPremiumPercent}
               checkIn={f.checkIn || null}
               checkOut={f.checkOut || null}
               onDayClick={onDayClick}

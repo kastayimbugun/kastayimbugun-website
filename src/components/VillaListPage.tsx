@@ -57,6 +57,7 @@ export function parseVillaQuery(raw: RawParams): VillaListQuery {
     q: one(raw.q)?.slice(0, 80),
     kisi: num(raw.kisi) ?? num(raw.guests),
     yatak: num(raw.yatak),
+    minFiyat: num(raw.minFiyat),
     maxFiyat: num(raw.maxFiyat),
     ozellik: ozellik.length ? ozellik : undefined,
     sirala: siralaRaw && SORTS.has(siralaRaw) ? siralaRaw : undefined,

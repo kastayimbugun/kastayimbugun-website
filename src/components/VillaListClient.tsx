@@ -27,6 +27,9 @@ const filterAmenities: AmenityKey[] = [
 
 type Sort = "featured" | "priceAsc" | "priceDesc" | "rating";
 
+/** Kaydıracın adımı; iki tutamak arasındaki en küçük mesafe de budur. */
+const PRICE_STEP = 500;
+
 export default function VillaListClient({
   items,
   total,
@@ -63,6 +66,7 @@ export default function VillaListClient({
   const [q, setQLocal] = useState(query.q ?? "");
   const [minGuests, setMinGuestsLocal] = useState(query.kisi ?? 0);
   const [minBeds, setMinBedsLocal] = useState(query.yatak ?? 0);
+  const [minPrice, setMinPriceLocal] = useState(query.minFiyat ?? 0);
   const [maxPrice, setMaxPriceLocal] = useState(query.maxFiyat ?? priceCeiling);
   const [amenities, setAmenitiesLocal] = useState<AmenityKey[]>(
     query.ozellik ?? []
@@ -85,6 +89,7 @@ export default function VillaListClient({
       q: q || undefined,
       kisi: minGuests || undefined,
       yatak: minBeds || undefined,
+      minFiyat: minPrice > 0 ? minPrice : undefined,
       maxFiyat: maxPrice < priceCeiling ? maxPrice : undefined,
       ozellik: amenities.length ? amenities : undefined,
       sirala: sort !== "featured" ? sort : undefined,
@@ -129,9 +134,18 @@ export default function VillaListClient({
     setMinBedsLocal(v);
     applyFilters({ yatak: v || undefined });
   };
+  // Tutamaklar birbirini geçemez: alt sınır üst sınırın bir adım altında,
+  // üst sınır alt sınırın bir adım üstünde durur. Aksi hâlde "en az 20.000,
+  // en çok 5.000" gibi hiçbir zaman sonuç vermeyecek bir aralık kurulabilirdi.
+  const setMinPrice = (v: number) => {
+    const clamped = Math.min(v, maxPrice - PRICE_STEP);
+    setMinPriceLocal(clamped);
+    applyDebounced({ minFiyat: clamped > 0 ? clamped : undefined });
+  };
   const setMaxPrice = (v: number) => {
-    setMaxPriceLocal(v);
-    applyDebounced({ maxFiyat: v < priceCeiling ? v : undefined });
+    const clamped = Math.max(v, minPrice + PRICE_STEP);
+    setMaxPriceLocal(clamped);
+    applyDebounced({ maxFiyat: clamped < priceCeiling ? clamped : undefined });
   };
   const setSort = (v: Sort) => {
     setSortLocal(v);
@@ -151,6 +165,7 @@ export default function VillaListClient({
     setQLocal("");
     setMinGuestsLocal(0);
     setMinBedsLocal(0);
+    setMinPriceLocal(0);
     setMaxPriceLocal(priceCeiling);
     setAmenitiesLocal([]);
     applyFilters({
@@ -158,6 +173,7 @@ export default function VillaListClient({
       q: undefined,
       kisi: undefined,
       yatak: undefined,
+      minFiyat: undefined,
       maxFiyat: undefined,
       ozellik: undefined,
     });
@@ -321,20 +337,53 @@ export default function VillaListClient({
         <label className="mb-2 block text-sm font-semibold text-brand-900">
           {t("filter.price")}
         </label>
-        {/* Sınırlar artık veriden: `priceCeiling` yayındaki en yüksek gecelik
-            taban fiyat. Eskiden hem varsayılan hem tavan 25.000 idi ve gecelik
-            tabanı bunun üstündeki villalar hiçbir koşulda listelenemiyordu. */}
-        <input
-          type="range"
-          min={0}
-          max={priceCeiling}
-          step={500}
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(Number(e.target.value))}
-          className="w-full accent-brand-600"
-        />
-        <div className="mt-1 text-sm font-semibold text-brand-700">
-          ≤ {formatPrice(maxPrice, lang)}
+        {/* Sınırlar veriden: `priceCeiling` yayındaki en yüksek gecelik taban
+            fiyat. Eskiden hem varsayılan hem tavan 25.000 idi ve gecelik tabanı
+            bunun üstündeki villalar hiçbir koşulda listelenemiyordu.
+
+            Çift uçlu: tek uçlu kaydıraçla "5.000 ile 10.000 arası" denemez,
+            yalnızca "10.000 altı" denirdi — bütçesi olan ama en ucuzu da
+            istemeyen misafir aradığını bulamıyordu. */}
+        <div className="range-dual relative mt-3 h-5">
+          {/* Ray */}
+          <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-sand-200" />
+          {/* Seçili aralık */}
+          <div
+            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-brand-600"
+            style={{
+              left: `${(minPrice / priceCeiling) * 100}%`,
+              right: `${100 - (maxPrice / priceCeiling) * 100}%`,
+            }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={priceCeiling}
+            step={PRICE_STEP}
+            value={minPrice}
+            onChange={(e) => setMinPrice(Number(e.target.value))}
+            aria-label={`${t("filter.price")} — ${t("filter.priceMin")}`}
+            className="top-1/2"
+          />
+          <input
+            type="range"
+            min={0}
+            max={priceCeiling}
+            step={PRICE_STEP}
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(Number(e.target.value))}
+            aria-label={`${t("filter.price")} — ${t("filter.priceMax")}`}
+            className="top-1/2"
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-sm font-semibold text-brand-700">
+          <span>{formatPrice(minPrice, lang)}</span>
+          <span className="text-brand-900/40">–</span>
+          <span>
+            {maxPrice >= priceCeiling
+              ? `${formatPrice(priceCeiling, lang)}+`
+              : formatPrice(maxPrice, lang)}
+          </span>
         </div>
       </div>
 

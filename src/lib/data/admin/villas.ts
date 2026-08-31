@@ -67,7 +67,7 @@ export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
     .from("villas")
     .select(
       `id, name, capacity, min_nights, base_price, cleaning_fee, service_rate,
-       weekend_premium_percent, los_weekly_discount_percent,
+       discount_percent, weekend_premium_percent, los_weekly_discount_percent,
        los_monthly_discount_percent, last_minute_discount_percent,
        last_minute_days, extra_guest_fee, extra_guest_after,
        regions ( name ),
@@ -99,6 +99,7 @@ export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
       los_monthly_discount_percent: number | null;
       last_minute_discount_percent: number | null;
       last_minute_days: number | null;
+      discount_percent: number | null;
       extra_guest_fee: number | null;
       extra_guest_after: number | null;
       regions: { name: string } | null;
@@ -127,6 +128,9 @@ export async function getVillaPricingOptions(): Promise<VillaPricingOption[]> {
       pricePerNight: Number(v.base_price),
       cleaningFee: Number(v.cleaning_fee ?? 0),
       serviceRate: Number(v.service_rate ?? 0.05),
+      // Flaş indirim panelde de hesaba katılmalı: aksi hâlde manuel rezervasyon
+      // formunun önerdiği tutar, misafirin sitede gördüğü tutardan yüksek olur.
+      discountPercent: v.discount_percent,
       weekendPremiumPercent: v.weekend_premium_percent,
       losWeeklyDiscountPercent: v.los_weekly_discount_percent,
       losMonthlyDiscountPercent: v.los_monthly_discount_percent,

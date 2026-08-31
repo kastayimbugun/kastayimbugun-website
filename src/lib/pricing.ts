@@ -19,10 +19,23 @@ export interface PriceBreakdown {
   discountLabel: string | null;
   /** Kapasite üstü kişi ek ücreti (toplam, tüm geceler); yoksa 0. */
   extraGuestFee: number;
+  /** Uygulanan villa düzeyi "flaş indirim" yüzdesi; yoksa 0. */
+  flashPercent: number;
+  /** Flaş indirim ÖNCESİ ara toplam. İndirim yoksa `subtotal`e eşittir. */
+  grossSubtotal: number;
+  /** Flaş indirimden kazanılan tutar (grossSubtotal − subtotal); yoksa 0. */
+  flashDiscount: number;
 }
 
 /** İsteğe bağlı fiyat kuralları — hepsi opsiyonel, tanımsızsa uygulanmaz. */
 export interface PriceRules {
+  /**
+   * Villa düzeyi "flaş indirim" — panelde "İndirim %" alanı. Kartta üstü çizili
+   * fiyat ve kırmızı rozet, takvimde indirimli gecelik olarak ZATEN gösteriliyor;
+   * yani ilan edilen fiyat odur ve toplam da onun üzerinden kurulur. Uzun
+   * konaklama / son dakika indirimleri bunun ÜSTÜNE uygulanır.
+   */
+  discountPercent?: number | null;
   /** Cuma/Cumartesi gecelerine yüzde prim. */
   weekendPremiumPercent?: number | null;
   /** 7+ gecede yüzde indirim. */
@@ -65,6 +78,35 @@ export interface PriceContext {
 
 const pct = (v: number | null | undefined) => (v && v > 0 ? v : 0);
 
+/**
+ * Tek bir gecenin nihai fiyatı: sezon fiyatı → hafta sonu primi → flaş indirim.
+ *
+ * Takvim hücresi ve toplam hesabı AYNI bu fonksiyondan geçer. Eskiden
+ * geçmiyorlardı ve ikisi de aynı yöne sapıyordu — müşterinin aleyhine:
+ *   · Takvim flaş indirimi uyguluyordu, `calcPrice` uygulamıyordu → kartta
+ *     "%20 indirim" yazıp indirimsiz tahsil.
+ *   · `calcPrice` hafta sonu primini uyguluyordu, takvim uygulamıyordu →
+ *     takvimde gördüğü Cuma fiyatından pahalı tahsil.
+ * İkisi de "gördüğüm fiyat bu değildi" demektir.
+ *
+ * Kuruş değil lira yuvarlaması bilinçli: müşteri takvimdeki gecelik rakamları
+ * alt alta toplayınca dökümdeki ara toplamı bulabilsin.
+ */
+export function nightlyRate(
+  baseNightly: number,
+  date: Date,
+  rules: Pick<PriceRules, "weekendPremiumPercent" | "discountPercent">
+): number {
+  let n = baseNightly;
+  const weekend = pct(rules.weekendPremiumPercent);
+  // getDay: 5 = Cuma, 6 = Cumartesi (o gece hafta sonu sayılır).
+  const dow = date.getDay();
+  if (weekend > 0 && (dow === 5 || dow === 6)) n = n * (1 + weekend / 100);
+  const flash = pct(rules.discountPercent);
+  if (flash > 0) n = n * (1 - flash / 100);
+  return Math.round(n);
+}
+
 export function calcPrice(
   villa: PricingInput,
   checkIn: string,
@@ -77,9 +119,11 @@ export function calcPrice(
   // Geçersiz/boş aralık: parasal alanların tümü 0.
   // nightlyAvg gösterim için gecelik taban fiyatı taşıyabilir.
   if (nights <= 0) {
+    const flash = pct(villa.discountPercent);
     return {
       nights: 0,
-      nightlyAvg: villa.pricePerNight,
+      // Kartla aynı sayı: kart da taban fiyata flaş indirimi uyguluyor.
+      nightlyAvg: Math.round(villa.pricePerNight * (1 - flash / 100)),
       subtotal: 0,
       cleaningFee: 0,
       serviceFee: 0,
@@ -88,6 +132,9 @@ export function calcPrice(
       discount: 0,
       discountLabel: null,
       extraGuestFee: 0,
+      flashPercent: flash,
+      grossSubtotal: 0,
+      flashDiscount: 0,
     };
   }
 
@@ -95,22 +142,25 @@ export function calcPrice(
   // Cuma/Cumartesi gecesine hafta sonu primi eklenir (kural 1).
   // Saat dilimi kaymasını önlemek için yerel gece yarısından başla ve
   // günü setDate(getDate()+i) ile güvenli biçimde ilerlet (getTime()+86400000 DEĞİL).
-  const weekend = pct(villa.weekendPremiumPercent);
+  // Hafta sonu primi (kural 1) ve flaş indirim (kural 0) gece bazında
+  // `nightlyRate` içinde uygulanır — takvim hücresiyle birebir aynı fonksiyon.
+  const flashPercent = pct(villa.discountPercent);
   let subtotal = 0;
+  let grossSubtotal = 0;
   const start = new Date(checkIn + "T00:00:00");
   for (let i = 0; i < nights; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     const iso = toISO(d);
-    let nightly = priceForDate(iso, villa.seasons) ?? villa.pricePerNight;
-    // getDay: 5 = Cuma, 6 = Cumartesi (o gece hafta sonu sayılır).
-    const dow = d.getDay();
-    if (weekend > 0 && (dow === 5 || dow === 6)) {
-      nightly = nightly * (1 + weekend / 100);
-    }
-    subtotal += nightly;
+    const base = priceForDate(iso, villa.seasons) ?? villa.pricePerNight;
+    subtotal += nightlyRate(base, d, villa);
+    // Brüt = flaş indirim uygulanmamış hali; dökümde "yerine" fiyatı bundan.
+    grossSubtotal += nightlyRate(base, d, {
+      weekendPremiumPercent: villa.weekendPremiumPercent,
+      discountPercent: 0,
+    });
   }
-  subtotal = Math.round(subtotal);
+  const flashDiscount = grossSubtotal - subtotal;
 
   // Uzun konaklama indirimi (kural 2): en uygun eşik uygulanır.
   const weekly = pct(villa.losWeeklyDiscountPercent);
@@ -147,7 +197,9 @@ export function calcPrice(
     extraGuestFee = (ctx.guests - after) * efee * nights;
   }
 
-  // Brüt gecelik ortalama (indirimsiz) — "X × N gece = subtotal" tutarlı olsun.
+  // Gecelik ortalama — "X × N gece = subtotal" satırı tutarlı olsun diye
+  // subtotal'den türetilir; subtotal flaş indirimli olduğu için bu rakam da
+  // karttaki/takvimdeki indirimli gecelikle aynı düzeydedir.
   const nightlyAvg = Math.round(subtotal / nights);
   const cleaningFee = villa.cleaningFee ?? 0;
   const serviceRate = villa.serviceRate ?? 0.05;
@@ -165,5 +217,8 @@ export function calcPrice(
     discount,
     discountLabel,
     extraGuestFee,
+    flashPercent,
+    grossSubtotal,
+    flashDiscount,
   };
 }

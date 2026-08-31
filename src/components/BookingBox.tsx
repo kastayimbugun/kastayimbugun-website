@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice, formatDateShort, businessToday } from "@/lib/format";
-import { priceRange } from "@/lib/villaUtils";
+import { displayPriceRange } from "@/lib/villaUtils";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { rangeHasConflict } from "@/lib/availability";
 import { calcPrice } from "@/lib/pricing";
@@ -88,8 +88,10 @@ export default function BookingBox({
         })
       : null;
 
-  // Tarih seçilmemişken gösterilecek fiyat: kartla aynı kaynak (sezon minimumu).
-  const headlineFrom = priceRange(villa).min;
+  // Tarih seçilmemişken gösterilecek fiyat: kartla aynı kaynak (sezon minimumu,
+  // flaş indirim uygulanmış). İndirim çarpanı eskiden yalnızca kartta vardı;
+  // kart ₺4.400, buradaki başlık ₺5.500 yazıyordu.
+  const headlineFrom = displayPriceRange(villa).min;
 
   const nights = price?.nights ?? 0;
   const valid = nights >= villa.minNights && !conflict;
@@ -199,6 +201,20 @@ export default function BookingBox({
             </span>
             <span>{formatPrice(price.subtotal, lang)}</span>
           </div>
+          {/*
+            Flaş indirim gecelik fiyata GÖMÜLÜ (kart ve takvimde ilan edilen
+            rakam o). Burada ayrıca yazılıyor ki müşteri ne kazandığını görsün.
+          */}
+          {price.flashDiscount > 0 && (
+            <div className="flex justify-between text-rose-600">
+              <span className="font-semibold">
+                %{price.flashPercent} {t("book.flashDiscount")}
+              </span>
+              <span className="text-brand-900/40 line-through">
+                {formatPrice(price.grossSubtotal, lang)}
+              </span>
+            </div>
+          )}
           {price.discount > 0 && (
             <div className="flex justify-between font-semibold text-emerald-700">
               <span>{price.discountLabel}</span>

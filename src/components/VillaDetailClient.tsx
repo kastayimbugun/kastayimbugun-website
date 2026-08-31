@@ -24,7 +24,7 @@ import VillaCard from "./VillaCard";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice, formatDate, businessToday } from "@/lib/format";
 import { calcPrice } from "@/lib/pricing";
-import { priceRange } from "@/lib/villaUtils";
+import { displayPriceRange } from "@/lib/villaUtils";
 import MobileBookingBar from "./MobileBookingBar";
 import { rangeHasConflict } from "@/lib/availability";
 import { amenityIcons } from "@/lib/amenityIcons";
@@ -393,6 +393,7 @@ export default function VillaDetailClient({
                 onDayClick={onDayClick}
                 seasons={villa.seasons}
                 discountPercent={villa.discountPercent}
+                weekendPremiumPercent={villa.weekendPremiumPercent}
               />
             </div>
           </section>
@@ -610,7 +611,7 @@ export default function VillaDetailClient({
         villaName={villa.name}
         villaCode={villa.code}
         priceLabel={formatPrice(
-          barPrice ? barPrice.nightlyAvg : priceRange(villa).min,
+          barPrice ? barPrice.nightlyAvg : displayPriceRange(villa).min,
           lang
         )}
         totalLabel={barPrice ? formatPrice(barPrice.total, lang) : null}

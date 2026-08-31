@@ -478,25 +478,55 @@ gösterdi.
 > **Tek başına en kısa yolu 7 tıklamadan 3'e indiriyor.** Bugün kullanıcı tarihi iki kez
 > giriyor ve ilki hiçbir işe yaramıyor.
 
-### 6.5.2 — Mobil huni (1,5 gün)
+### 6.5.2 — Mobil huni ✅ 31.08.2026
 
-| ⬜ | İş | Bulgu |
+| Durum | İş | Bulgu |
 |---|---|---|
-| ⬜ | Yapışkan alt CTA çubuğu (`fixed bottom-0 lg:hidden`) | UX-02 |
-| ⬜ | `BookingBox` bottom-sheet — **takvim kutunun içinde** | UX-02, UX-03 |
-| ⬜ | WhatsApp CTA'sı (villa detayı + mobil çubuk + teşekkürler) | UX-06 |
+| ✅ | Yapışkan alt CTA çubuğu (`MobileBookingBar`, `fixed bottom-0 lg:hidden`) | UX-02 |
+| ✅ | Buton hedefi bağlama göre: tarih yoksa takvime, varsa kutuya | UX-02, UX-03 |
+| ✅ | WhatsApp CTA'sı (mobil çubuk; numara tanımsızsa render edilmiyor) | UX-06 |
+| ⬜ | `BookingBox` bottom-sheet — takvim kutunun içinde | UX-02 |
 
-### 6.5.3 — Fiyat tutarlılığı (1 gün)
+**Ölçüm (375×812, villa detayı):** sayfa 6.755 px = 8,3 ekran; "Rezervasyon Talebi
+Gönder" butonu y=4.228 px, yani **5,2 ekran aşağıda**. Çubuk artık ilk ekranda.
 
-| ⬜ | İş | Bulgu |
+**Doğrulanamadı:** çubuğun rezervasyon kutusu görününce gizlenmesi. Arka plandaki
+belgede (`visibilityState === "hidden"`) ne IntersectionObserver ne scroll olayı
+tetikleniyor. Gerçek cihazda kontrol edilmeli — kodda da not var.
+
+### 6.5.3 — Fiyat tutarlılığı ✅ 31.08.2026 *(bir kalem UX-03 açık)*
+
+| Durum | İş | Bulgu |
 |---|---|---|
-| ⬜ | `discountPercent`'i `calcPrice`'a ekle *(bugün kartta ve takvimde gösteriliyor, toplama yansımıyor)* | PARA-03 |
-| ⬜ | Kart, filtre, sıralama ve kutu **aynı metriği** göstersin | UX-03 |
-| ⬜ | Fiyat filtresi sınırlarını veriden türet, çift uçlu yap *(bugün 25.000 ₺'de tavan)* | UX-04 |
+| ✅ | `discountPercent` `calcPrice`'a girdi; gecelik fiyat tek fonksiyondan (`nightlyRate`) | PARA-03 |
+| ✅ | Takvim hafta sonu primini de gösteriyor *(gösterdiğinden pahalı tahsil ediyordu)* | PARA-03 |
+| ✅ | Detay başlığı ve mobil çubuk kartla aynı "başlayan fiyat"ı veriyor (`displayPriceRange`) | UX-03 |
+| ✅ | Panelin manuel rezervasyon takvimi ile önerilen tutar aynı kurallardan geçiyor | UX-03 |
+| ✅ | Fiyat filtresi çift uçlu; sınırlar veriden (`priceCeiling`) | UX-04 |
+| ⬜ | **Filtre/sıralama `base_price`'a, kart sezon aralığına bakıyor** — aşağıya bak | UX-03 |
 
-> **UX-03 bugün görünür bir çelişki üretiyor:** kart sezon aralığını gösteriyor ama filtre
-> ve sıralama taban fiyata bakıyor — "≤10.000 ₺" filtresi "₺12.000–₺25.000" yazan kart
-> döndürebiliyor.
+**Ne değişti.** `nightlyRate(base, gün, kurallar)` tek gecenin nihai fiyatını üretir:
+sezon fiyatı → hafta sonu primi → flaş indirim. Takvim hücresi ve `calcPrice` **aynı**
+bu fonksiyondan geçer, o yüzden takvimdeki gecelikler toplanınca dökümün ara toplamı
+çıkar. Uzun konaklama / son dakika indirimleri bunun üstüne uygulanır.
+
+Doğrulandı (villa-akbulut1'e geçici %20 indirim konup geri alınarak): takvim
+~~25.000₺~~ **20.000₺**, kutu başlığı ₺20.000/gece, döküm "₺20.000 × 5 gece =
+₺100.000 · %20 indirim uygulandı ~~₺125.000~~ · Toplam ₺105.000", kart
+"₺10.400 – ₺24.000". Düzeltmeden önce aynı rezervasyon **₺131.250** olurdu —
+takvimde ilan edilenden **₺26.250 fazla**.
+
+**Açık kalan (UX-03'ün son parçası).** Filtre ve sıralama `villas.base_price`
+sütununa bakıyor, kart ise sezonların min–max aralığını gösteriyor. Bu yüzden
+"en çok ₺14.000" filtresi, taban fiyatı ₺13.000 ama yaz sezonu ₺30.000 olan bir
+villayı hâlâ döndürüyor ve kartta "₺13.000 – ₺30.000" yazıyor. Flaş indirim de
+aynı sorunu taşıyor: kart ₺10.400 ilan ederken filtre ₺13.000'e bakar.
+
+Doğru çözüm bir **migration**: `villas` üzerinde sezon minimumunu ve flaş indirimi
+içeren, indekslenebilir bir sütun (üretilmiş sütun + sezonlar için trigger), sonra
+filtre/sıralamayı ona çevirmek. Bilerek ertelendi — kod o sütuna bağlanırsa sütun
+oluşmadan yapılan bir deploy siteyi kırar; Turnstile'da tam bu sırayla yaşandı.
+Göçten önce, tek başına yapılmalı.
 
 ### 6.5.4 — Güven ve dürüstlük (1 gün)
 

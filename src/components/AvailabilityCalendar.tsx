@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { toISO, formatPriceShort } from "@/lib/format";
+import { nightlyRate } from "@/lib/pricing";
 import {
   isBooked,
   isPast,
@@ -21,7 +22,13 @@ interface Props {
   onDayClick: (iso: string) => void;
   months?: number;
   seasons?: Season[];
+  /** Villa düzeyi "flaş indirim" — hücrede üstü çizili + indirimli fiyat. */
   discountPercent?: number;
+  /**
+   * Cuma/Cumartesi primi. GEÇİLMEZSE takvim Cuma gecesini primsiz gösterir ama
+   * `calcPrice` primli tahsil eder — müşteri gördüğünden pahalıya konaklar.
+   */
+  weekendPremiumPercent?: number | null;
   /**
    * Dolu günün üzerine gelince gösterilecek not (ör. "Kime kapatıldı").
    * YALNIZCA panelde geçilir — herkese açık sitede geçilmez (gizlilik).
@@ -45,6 +52,7 @@ export default function AvailabilityCalendar({
   months = 2,
   seasons = [],
   discountPercent,
+  weekendPremiumPercent,
   getBookedNote,
   closedRanges = [],
 }: Props) {
@@ -158,10 +166,22 @@ export default function AvailabilityCalendar({
                 : null;
             const base = priceForDate(iso, seasons);
             const showPrice = base != null && !disabled && !closed;
-            const hasDiscount = showPrice && !!discountPercent;
-            const discounted = hasDiscount
-              ? Math.round(base! * (1 - discountPercent! / 100))
+            // Hücredeki rakam `calcPrice` ile AYNI fonksiyondan gelir; böylece
+            // takvimdeki gecelikler toplanınca dökümün ara toplamı çıkar.
+            // `gross` = flaş indirim öncesi (üstü çizili gösterilen).
+            const gross = showPrice
+              ? nightlyRate(base!, day, {
+                  weekendPremiumPercent,
+                  discountPercent: 0,
+                })
               : null;
+            const net = showPrice
+              ? nightlyRate(base!, day, {
+                  weekendPremiumPercent,
+                  discountPercent,
+                })
+              : null;
+            const hasDiscount = showPrice && net !== gross;
 
             let cls =
               "text-brand-900 hover:bg-brand-50 hover:ring-1 hover:ring-brand-300";
@@ -231,19 +251,19 @@ export default function AvailabilityCalendar({
                           selected ? "text-white/60" : "text-brand-900/30"
                         }`}
                       >
-                        {formatPriceShort(base!, lang)}
+                        {formatPriceShort(gross!, lang)}
                       </span>
                       <span
                         className={`text-[10px] font-semibold ${
                           selected ? "text-white" : "text-rose-600"
                         }`}
                       >
-                        {formatPriceShort(discounted!, lang)}
+                        {formatPriceShort(net!, lang)}
                       </span>
                     </span>
                   ) : (
                     <span className={`text-[10px] font-medium ${priceCls}`}>
-                      {formatPriceShort(base!, lang)}
+                      {formatPriceShort(net!, lang)}
                     </span>
                   ))}
               </button>

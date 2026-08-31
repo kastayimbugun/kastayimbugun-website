@@ -523,6 +523,7 @@ export interface VillaListQuery {
   cikis?: string;
   kisi?: number;
   yatak?: number;
+  minFiyat?: number;
   maxFiyat?: number;
   ozellik?: AmenityKey[];
   sirala?: VillaSort;
@@ -625,6 +626,7 @@ export async function getVillaCardPage(
   if (f.q) q = q.ilike("name", `%${f.q.replace(/[%_,()]/g, " ")}%`);
   if (f.kisi) q = q.gte("capacity", f.kisi);
   if (f.yatak) q = q.gte("bedrooms", f.yatak);
+  if (f.minFiyat) q = q.gte("base_price", f.minFiyat);
   if (f.maxFiyat) q = q.lte("base_price", f.maxFiyat);
   if (f.ozellik?.length) q = q.contains("amenities", f.ozellik);
 
