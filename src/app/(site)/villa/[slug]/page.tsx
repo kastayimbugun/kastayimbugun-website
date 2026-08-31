@@ -92,6 +92,7 @@ export default async function VillaPage({
       initialCheckIn={initialCheckIn}
       initialCheckOut={initialCheckOut}
       initialGuests={initialGuests}
+      whatsapp={site.whatsapp}
     />
   );
 }

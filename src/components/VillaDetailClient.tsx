@@ -22,7 +22,10 @@ import BookingBox from "./BookingBox";
 import { type GuestCounts } from "./GuestSelector";
 import VillaCard from "./VillaCard";
 import { useI18n } from "@/lib/i18n";
-import { formatPrice, formatDate } from "@/lib/format";
+import { formatPrice, formatDate, businessToday } from "@/lib/format";
+import { calcPrice } from "@/lib/pricing";
+import { priceRange } from "@/lib/villaUtils";
+import MobileBookingBar from "./MobileBookingBar";
 import { rangeHasConflict } from "@/lib/availability";
 import { amenityIcons } from "@/lib/amenityIcons";
 import { villaDistances } from "@/lib/distances";
@@ -40,6 +43,7 @@ export default function VillaDetailClient({
   initialCheckIn,
   initialCheckOut,
   initialGuests,
+  whatsapp,
 }: {
   villa: Villa;
   /** Benzer villalar bölümü için — sunucudan gelir */
@@ -58,6 +62,8 @@ export default function VillaDetailClient({
   initialCheckIn?: string | null;
   initialCheckOut?: string | null;
   initialGuests?: number | null;
+  /** Panelden girilen WhatsApp numarası — mobil çubuktaki hızlı iletişim. */
+  whatsapp?: string | null;
 }) {
   const { t, lang, amenity } = useI18n();
 
@@ -82,6 +88,27 @@ export default function VillaDetailClient({
   });
   const [showAllDist, setShowAllDist] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
+  const bookingRef = useRef<HTMLDivElement>(null);
+
+  // Mobil çubuk, rezervasyon kutusuyla AYNI fiyat kaynağını kullanır — iki
+  // yerde farklı sayı göstermek denetimdeki UX-03'ün ta kendisiydi.
+  const barConflict =
+    checkIn && checkOut
+      ? rangeHasConflict(checkIn, checkOut, villa.bookedRanges)
+      : false;
+  const barPrice =
+    checkIn && checkOut && !barConflict
+      ? calcPrice(villa, checkIn, checkOut, {
+          guests: guests.adults + guests.children,
+          asOf: businessToday(),
+        })
+      : null;
+
+  /** Tarih yoksa takvime, varsa rezervasyon kutusuna götürür. */
+  const goToBooking = () => {
+    const target = barPrice ? bookingRef.current : calendarRef.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const onDayClick = (iso: string) => {
     if (!checkIn || (checkIn && checkOut)) {
@@ -512,7 +539,7 @@ export default function VillaDetailClient({
         </div>
 
         {/* RIGHT — sticky booking */}
-        <div className="w-full lg:w-[360px] lg:shrink-0">
+        <div ref={bookingRef} className="w-full scroll-mt-24 lg:w-[360px] lg:shrink-0">
           <div className="lg:sticky lg:top-32">
             <BookingBox
               villa={villa}
@@ -578,6 +605,24 @@ export default function VillaDetailClient({
           </div>
         </section>
       )}
+
+      <MobileBookingBar
+        villaName={villa.name}
+        villaCode={villa.code}
+        priceLabel={formatPrice(
+          barPrice ? barPrice.nightlyAvg : priceRange(villa).min,
+          lang
+        )}
+        totalLabel={barPrice ? formatPrice(barPrice.total, lang) : null}
+        nights={barPrice?.nights ?? 0}
+        hasDates={!!barPrice}
+        whatsapp={whatsapp}
+        bookingBoxRef={bookingRef}
+        onPrimary={goToBooking}
+      />
+
+      {/* Yapışkan çubuk son bölümü örtmesin */}
+      <div aria-hidden="true" className="h-20 lg:hidden" />
     </div>
   );
 }
