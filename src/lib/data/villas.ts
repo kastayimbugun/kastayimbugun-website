@@ -517,6 +517,10 @@ export interface VillaListQuery {
   kategori?: string;
   /** Villa adında arama. */
   q?: string;
+  /** Giriş tarihi (yyyy-mm-dd) — bu tarihlerde DOLU olan villalar elenir. */
+  giris?: string;
+  /** Çıkış tarihi (yyyy-mm-dd, hariç). */
+  cikis?: string;
   kisi?: number;
   yatak?: number;
   maxFiyat?: number;
@@ -552,6 +556,31 @@ function descendantRegionIds(regions: Region[], slug: string): string[] {
  * DOM'da 3.000 `<img>` ve 2.400 dokunma dinleyicisi oluşuyordu. Panel bunu zaten
  * doğru yapıyordu (25/sayfa `.range()`); herkese açık taraf yapmıyordu.
  */
+/**
+ * Verilen tarih aralığında DOLU olan villaların id'leri.
+ *
+ * Müsaitlik filtresi yoktu: arama çubuğunda tarih seçen kullanıcının karşısına
+ * dolu villalar da çıkıyordu. Kullanıcı bir villaya giriyor, takvimde "dolu"
+ * görüyor, geri dönüyor — bu döngü birkaç kez tekrarlanınca siteyi terk ediyor.
+ *
+ * Aralık yarı açık: `[giris, cikis)`. Bir blok çakışıyorsa (`starts_on < cikis`
+ * ve `ends_on > giris`) villa o aralıkta satılamaz. Dönen satır sayısı o
+ * penceredeki BLOK sayısı kadar — katalog büyüklüğünden bağımsız.
+ */
+async function bookedVillaIds(giris: string, cikis: string): Promise<string[]> {
+  const { data, error } = await supabaseServer()
+    .from("villa_blocks")
+    .select("villa_id")
+    .lt("starts_on", cikis)
+    .gt("ends_on", giris);
+
+  if (error) {
+    console.error("[bookedVillaIds] okunamadı:", error.message);
+    return [];
+  }
+  return [...new Set((data ?? []).map((b) => b.villa_id as string))];
+}
+
 export async function getVillaCardPage(
   f: VillaListQuery,
   regions: Region[],
@@ -585,6 +614,12 @@ export async function getVillaCardPage(
       return { items: [], total: 0, page, pageCount: 1 };
     }
     q = q.in("slug", categoryVillaSlugs);
+  }
+
+  // Müsaitlik: seçilen aralıkta dolu olanları ele.
+  if (f.giris && f.cikis && f.cikis > f.giris) {
+    const dolu = await bookedVillaIds(f.giris, f.cikis);
+    if (dolu.length) q = q.not("id", "in", `(${dolu.join(",")})`);
   }
 
   if (f.q) q = q.ilike("name", `%${f.q.replace(/[%_,()]/g, " ")}%`);

@@ -39,8 +39,19 @@ export function parseVillaQuery(raw: RawParams): VillaListQuery {
 
   const siralaRaw = one(raw.sirala) as VillaSort | undefined;
 
+  // Tarih: `giris`/`cikis` kanonik; `in`/`out` SearchBar'ın ürettiği eski adlar.
+  const iso = (v: string | string[] | undefined) => {
+    const s = one(v);
+    return s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined;
+  };
+  const giris = iso(raw.giris) ?? iso(raw.in);
+  const cikis = iso(raw.cikis) ?? iso(raw.out);
+
   return {
     bolge: one(raw.bolge),
+    // Çıkış girişten sonra değilse ikisini de yok say (yarı-açık aralık).
+    giris: giris && cikis && cikis > giris ? giris : undefined,
+    cikis: giris && cikis && cikis > giris ? cikis : undefined,
     // Kategori bağlantıları hâlâ `?category=` üretiyor; ikisini de kabul et.
     kategori: one(raw.kategori) ?? one(raw.category),
     q: one(raw.q)?.slice(0, 80),

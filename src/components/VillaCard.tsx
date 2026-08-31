@@ -25,8 +25,16 @@ const CARD_IMAGES = 5;
 export default function VillaCard({
   villa,
   eager = false,
+  context,
 }: {
   villa: VillaCardData;
+  /**
+   * Aramadan gelen bağlam (tarih, kişi) — detay sayfasına taşınır.
+   *
+   * Bu olmadan kullanıcı tarihi İKİ KEZ giriyordu: bir kez arama çubuğunda,
+   * bir kez de villa detayında. Aradaki her adımda seçim kayboluyordu.
+   */
+  context?: string;
   /**
    * Bu kart ilk ekranda mı? Yalnızca o zaman kapak fotoğrafı öncelikli yüklenir.
    *
@@ -136,7 +144,7 @@ export default function VillaCard({
 
   return (
     <Link
-      href={`/villa/${villa.slug}`}
+      href={context ? `/villa/${villa.slug}?${context}` : `/villa/${villa.slug}`}
       className={`group flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition duration-300 ${
         hasDiscount
           ? "border-rose-200 ring-1 ring-rose-200 hover:border-rose-300"

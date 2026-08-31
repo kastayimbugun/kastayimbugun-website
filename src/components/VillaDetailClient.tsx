@@ -37,6 +37,9 @@ export default function VillaDetailClient({
   otherVillas = [],
   prefs = DEFAULT_VILLA_DETAIL_PREFS,
   categoryVillas,
+  initialCheckIn,
+  initialCheckOut,
+  initialGuests,
 }: {
   villa: Villa;
   /** Benzer villalar bölümü için — sunucudan gelir */
@@ -45,12 +48,35 @@ export default function VillaDetailClient({
   prefs?: VillaDetailPrefs;
   /** "Benzer Villalar" kategori modundaysa önceden çözülmüş villalar */
   categoryVillas?: Villa[];
+  /**
+   * Aramadan gelen bağlam (sunucuda URL'den çözülür).
+   *
+   * Bunlar olmadan kullanıcı tarihi iki kez giriyordu: bir kez arama
+   * çubuğunda, bir kez de burada. Artık kart tıklandığında tarih ve kişi
+   * sayısı hazır gelir; fiyat da doğrudan hesaplanmış görünür.
+   */
+  initialCheckIn?: string | null;
+  initialCheckOut?: string | null;
+  initialGuests?: number | null;
 }) {
   const { t, lang, amenity } = useI18n();
-  const [checkIn, setCheckIn] = useState<string | null>(null);
-  const [checkOut, setCheckOut] = useState<string | null>(null);
+
+  // Gelen aralık bu villada gerçekten müsait mi? Değilse boş başla —
+  // dolu bir aralığı seçili göstermek yanlış bilgi verir.
+  const contextRangeUsable =
+    !!initialCheckIn &&
+    !!initialCheckOut &&
+    initialCheckOut > initialCheckIn &&
+    !rangeHasConflict(initialCheckIn, initialCheckOut, villa.bookedRanges);
+
+  const [checkIn, setCheckIn] = useState<string | null>(
+    contextRangeUsable ? initialCheckIn! : null
+  );
+  const [checkOut, setCheckOut] = useState<string | null>(
+    contextRangeUsable ? initialCheckOut! : null
+  );
   const [guests, setGuests] = useState<GuestCounts>({
-    adults: Math.min(2, villa.capacity),
+    adults: Math.min(initialGuests && initialGuests > 0 ? initialGuests : 2, villa.capacity),
     children: 0,
     babies: 0,
   });

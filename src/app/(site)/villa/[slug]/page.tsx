@@ -36,10 +36,26 @@ export async function generateMetadata({
 
 export default async function VillaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
+
+  // Aramadan gelen bağlam: kullanıcı listede tarih seçtiyse burada da hazır
+  // gelsin. Sunucuda çözülür, istemciye prop olarak iner (useSearchParams'a
+  // gerek yok — o statik sayfayı CSR bailout'a düşürür).
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const iso = (v: string | string[] | undefined) => {
+    const x = one(v);
+    return x && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : null;
+  };
+  const initialCheckIn = iso(sp.giris) ?? iso(sp.in);
+  const initialCheckOut = iso(sp.cikis) ?? iso(sp.out);
+  const kisi = Number(one(sp.kisi) ?? one(sp.guests));
+  const initialGuests = Number.isFinite(kisi) && kisi > 0 ? kisi : null;
   const [villa, site] = await Promise.all([getVilla(slug), getSiteSettings()]);
   if (!villa) notFound();
 
@@ -73,6 +89,9 @@ export default async function VillaPage({
       otherVillas={similar}
       prefs={prefs}
       categoryVillas={categoryVillas}
+      initialCheckIn={initialCheckIn}
+      initialCheckOut={initialCheckOut}
+      initialGuests={initialGuests}
     />
   );
 }

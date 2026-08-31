@@ -166,6 +166,15 @@ export default function VillaListClient({
   // Sonuçlar sunucudan hazır gelir; istemcide filtreleme/sıralama YOK.
   const results = items;
 
+  // Kartlara taşınacak arama bağlamı: tarih ve kişi sayısı detayda hazır gelsin.
+  const cardContext = (() => {
+    const sp = new URLSearchParams();
+    if (query.giris) sp.set("giris", query.giris);
+    if (query.cikis) sp.set("cikis", query.cikis);
+    if (query.kisi) sp.set("kisi", String(query.kisi));
+    return sp.toString();
+  })();
+
   const Filters = (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -410,7 +419,7 @@ export default function VillaListClient({
                   <li key={v.slug}>
                     {/* Yalnızca ilk satır öncelikli: 24 kartın hepsi preload
                         edilirse hiçbiri öncelikli olmaz ve LCP bozulur. */}
-                    <VillaCard villa={v} eager={i < 3} />
+                    <VillaCard villa={v} eager={i < 3} context={cardContext} />
                   </li>
                 ))}
               </ul>
