@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { formatPrice, formatDateShort, businessToday } from "@/lib/format";
+import { priceRange } from "@/lib/villaUtils";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { rangeHasConflict } from "@/lib/availability";
 import { calcPrice } from "@/lib/pricing";
@@ -87,6 +88,9 @@ export default function BookingBox({
         })
       : null;
 
+  // Tarih seçilmemişken gösterilecek fiyat: kartla aynı kaynak (sezon minimumu).
+  const headlineFrom = priceRange(villa).min;
+
   const nights = price?.nights ?? 0;
   const valid = nights >= villa.minNights && !conflict;
 
@@ -133,13 +137,29 @@ export default function BookingBox({
 
   return (
     <div className="rounded-2xl border border-sand-200 bg-white p-5">
+      {/*
+        Başlık fiyatı, kart ve seçili tarihle TUTARLI olmalı.
+
+        Eskiden burada her zaman `villa.pricePerNight` (taban fiyat) yazıyordu.
+        Kart sezonların min–max aralığını gösterdiği için kullanıcı kartta
+        "₺5.500 – ₺12.750", detayda "₺5.500", dökümde ise "₺9.000 × 5 gece"
+        görüyordu — üç yerde üç farklı sayı, "fiyat oyunu oynuyorlar" hissi.
+
+        Artık: tarih seçiliyse O ARALIĞIN gecelik ortalaması, seçili değilse
+        "en düşük sezon fiyatından itibaren" (kartla aynı dil).
+      */}
       <div className="flex items-baseline">
         <span className="text-2xl font-extrabold text-brand-800">
-          {formatPrice(villa.pricePerNight, lang)}
+          {formatPrice(price ? price.nightlyAvg : headlineFrom, lang)}
         </span>
         <span className="ml-1 text-sm text-brand-900/60">
           / {t("card.perNight")}
         </span>
+        {!price && (
+          <span className="ml-2 text-xs text-brand-900/70">
+            {t("book.fromPrice")}
+          </span>
+        )}
       </div>
 
       <div className="mt-4 flex gap-2">
