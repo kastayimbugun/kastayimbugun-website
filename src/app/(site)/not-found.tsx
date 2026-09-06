@@ -1,8 +1,11 @@
 import NotFoundClient from "@/components/NotFoundClient";
 
+// Gerekçe için `src/app/not-found.tsx` içindeki nota bak: marka şablondan
+// gelir, `robots` kökün `index, follow` bloğunu değiştirir.
 export const metadata = {
-  title: "404 — Sayfa Bulunamadı | Kastayım Bugün Villaları",
+  title: "Sayfa Bulunamadı",
   description: "Aradığınız sayfa veya villa bulunamadı.",
+  robots: { index: false, follow: true },
 };
 
 export default function NotFoundPage() {

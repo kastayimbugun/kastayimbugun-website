@@ -18,8 +18,8 @@ export default async function YeniBolgePage({
 
       <div className="mt-3">
         <PageHeader
-          title="Yeni Konum (İl, İlçe veya Bölge)"
-          description="İl eklemek için Üst Konum alanını boş bırakın. İlçe eklemek için İl, Bölge eklemek için İlçe seçin."
+          title="Yeni Konum"
+          description="İl eklemek için Üst Konum alanını boş bırakın. Alt kademe eklemek için bağlanacağı konumu seçin; liste her derinlikteki konumu gösterir."
         />
       </div>
 

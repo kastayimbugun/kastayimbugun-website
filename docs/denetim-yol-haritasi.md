@@ -466,17 +466,17 @@ gösterdi.
 | Mobilde ilk fiyata mesafe | 3 ekran (y=2.465 px) |
 | Yapışkan rezervasyon CTA'sı | yok |
 
-### 6.5.1 — Arama bağlamı (1,5 gün)
+### 6.5.1 — Arama bağlamı ✅ 30.08.2026
 
-| ⬜ | İş | Bulgu |
-|---|---|---|
-| ⬜ | Liste `in`/`out` okusun ve `rangeHasConflict()` ile filtrelesin | UX-01 |
-| ⬜ | Kart href'i mevcut query'yi taşısın | UX-01 |
-| ⬜ | Detay sayfası `checkIn`/`checkOut`/`guests` ile önceden dolsun | UX-01 |
+| Durum | İş | Bulgu | Kanıt |
+|---|---|---|---|
+| ✅ | Liste tarih aralığını okuyup dolu villaları eliyor (SQL'de, istemcide değil) | UX-01 | `data/villas.ts:629` |
+| ✅ | Kart href'i tarih + kişi bağlamını taşıyor | UX-01 | `VillaListClient.tsx:302` |
+| ✅ | Detay sayfası `giris`/`cikis`/`kisi` ile önceden doluyor | UX-01 | `villa/[slug]/page.tsx:55` |
 
-> `rangeHasConflict()` zaten `availability.ts:24`'te hazır, `bookedRanges` zaten çekiliyor.
-> **Tek başına en kısa yolu 7 tıklamadan 3'e indiriyor.** Bugün kullanıcı tarihi iki kez
-> giriyor ve ilki hiçbir işe yaramıyor.
+> Bağlam parametrelerinin filtre değişiminde düşmesi 6.5.4'te ayrıca düzeltildi:
+> `applyFilters` URL'i sıfırdan kurduğu için `giris`/`cikis` herhangi bir filtreye
+> dokunulduğunda sessizce siliniyordu.
 
 ### 6.5.2 — Mobil huni ✅ 31.08.2026
 

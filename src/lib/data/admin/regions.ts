@@ -1,12 +1,33 @@
 import "server-only";
 import { supabaseSession } from "@/lib/supabase/session";
 import { imageUrl } from "@/lib/images/url";
+import {
+  MAX_REGION_DEPTH,
+  buildRegionTree,
+  flattenRegionTree,
+  regionAncestors,
+  regionDepthOf,
+  regionLevelLabel,
+  regionSubtreeIds,
+  type RegionTreeNode,
+} from "@/lib/regionTree";
+
+/**
+ * DİKKAT — `regions.depth` sütunu bu dosyada HİÇ okunmaz.
+ *
+ * Sütun türetilmiş bir önbellektir ve bozulabilir: panel arayüzü uzun süre
+ * derinliği 3'te kırptığı için 25 kaydın 7'sinde yanlış değer duruyordu
+ * (hepsinde 3 yazıyor, gerçek zincir 4-6). Tek doğru kaynak `parent_id`
+ * zinciridir. Böylece bu kod, düzeltme migration'ı henüz uygulanmamış bir
+ * veritabanında da doğru çalışır.
+ */
 
 export interface RegionOption {
   id: string;
   name: string;
   province: string;
   parentId: string | null;
+  /** `parent_id` zincirinden HESAPLANMIŞ derinlik (kök = 0). */
   depth: number;
 }
 
@@ -15,7 +36,7 @@ export async function getRegionOptions(): Promise<RegionOption[]> {
   const supabase = await supabaseSession();
   const { data, error } = await supabase
     .from("regions")
-    .select("id, name, province, parent_id, depth")
+    .select("id, name, province, parent_id")
     .order("sort_order");
   if (error) {
     if (error.message.includes("parent_id")) {
@@ -33,12 +54,18 @@ export async function getRegionOptions(): Promise<RegionOption[]> {
     }
     throw new Error(`Bölgeler okunamadı: ${error.message}`);
   }
-  return (data ?? []).map((r) => ({
+
+  const rows = data ?? [];
+  const parentOf = new Map<string, string | null>(
+    rows.map((r) => [r.id, r.parent_id ?? null])
+  );
+
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     province: r.province,
     parentId: r.parent_id ?? null,
-    depth: r.depth ?? 0,
+    depth: regionDepthOf(r.id, parentOf),
   }));
 }
 
@@ -51,23 +78,14 @@ export interface AdminRegion {
   sortOrder: number;
   villaCount: number;
   parentId: string | null;
-  depth: number;
 }
 
-export type AdminNeighborhoodNode = AdminRegion & {
-  subRegions?: AdminRegion[];
-};
+/** Kaç seviye olursa olsun aynı tip — sabit "şehir/ilçe/mahalle" katmanı yok. */
+export type AdminRegionNode = RegionTreeNode<AdminRegion>;
 
-export type AdminDistrictNode = AdminRegion & {
-  neighborhoods: AdminNeighborhoodNode[];
-};
-
-export type AdminCityNode = AdminRegion & {
-  districts: AdminDistrictNode[];
-};
-
-export interface AdminRegionTree3Level {
-  cities: AdminCityNode[];
+export interface AdminRegionTree {
+  roots: AdminRegionNode[];
+  /** Üst bölgesi bulunamayan kayıtlar; yine de panelde gösterilir. */
   orphans: AdminRegion[];
 }
 
@@ -75,12 +93,20 @@ export interface AdminRegionTree3Level {
 export async function getAdminRegion(id: string): Promise<AdminRegion | null> {
   const supabase = await supabaseSession();
 
-  let data: any = null;
-  let error: any = null;
+  let data: {
+    id: string;
+    slug: string;
+    name: string;
+    province: string;
+    hero_image: string | null;
+    sort_order: number;
+    parent_id?: string | null;
+  } | null = null;
+  let error: { message: string } | null = null;
 
   const res = await supabase
     .from("regions")
-    .select("id, slug, name, province, hero_image, sort_order, parent_id, depth")
+    .select("id, slug, name, province, hero_image, sort_order, parent_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -116,7 +142,6 @@ export async function getAdminRegion(id: string): Promise<AdminRegion | null> {
     sortOrder: data.sort_order,
     villaCount: count ?? 0,
     parentId: data.parent_id ?? null,
-    depth: data.depth ?? 0,
   };
 }
 
@@ -131,13 +156,12 @@ export async function getAdminRegions(): Promise<AdminRegion[]> {
     hero_image: string | null;
     sort_order: number;
     parent_id?: string | null;
-    depth?: number;
   }> | null = null;
-  let error: any = null;
+  let error: { message: string } | null = null;
 
   const res = await supabase
     .from("regions")
-    .select("id, slug, name, province, hero_image, sort_order, parent_id, depth")
+    .select("id, slug, name, province, hero_image, sort_order, parent_id")
     .order("sort_order");
 
   regions = res.data;
@@ -177,86 +201,65 @@ export async function getAdminRegions(): Promise<AdminRegion[]> {
     sortOrder: r.sort_order,
     villaCount: counts[i],
     parentId: r.parent_id ?? null,
-    depth: r.depth ?? 0,
   }));
 }
 
-/** Seviyeli Ağaç yapısına dönüştür: İl (0) → İlçe (1) → Bölge/Belde (2) → Alt Bölge/Mevki (3). */
-export async function getAdminRegionTree(): Promise<AdminRegionTree3Level> {
+/**
+ * Özyinelemeli bölge ağacı.
+ *
+ * ESKİ HATALI DAVRANIŞ: ağaç tam dört seviye elle kuruluyordu
+ * (şehir → ilçe → mahalle → altBölge) ve daha derini hiç toplamıyordu. Gerçek
+ * veride zincirler 6 seviyeye indiği için 25 bölgenin 7'si panelde HİÇ
+ * görünmüyordu; yönetici onları göremiyor, düzenleyemiyor, taşıyamıyordu.
+ * Artık derinlik sınırsız okunur — `MAX_REGION_DEPTH` yalnızca yazmayı sınırlar.
+ */
+export async function getAdminRegionTree(): Promise<AdminRegionTree> {
   const all = await getAdminRegions();
-
-  const regionMap = new Map<string, AdminRegion>();
-  all.forEach((r) => regionMap.set(r.id, r));
-
-  const childMap = new Map<string, AdminRegion[]>();
-  all.forEach((r) => {
-    if (r.parentId) {
-      const list = childMap.get(r.parentId) ?? [];
-      list.push(r);
-      childMap.set(r.parentId, list);
-    }
-  });
-
-  const cities: AdminCityNode[] = [];
-  const orphans: AdminRegion[] = [];
-
-  all.forEach((r) => {
-    if (!r.parentId) {
-      const children = childMap.get(r.id) ?? [];
-      // Çocukları varsa veya depth=0 ise Şehirdir
-      if (children.length > 0 || r.depth === 0) {
-        const districts: AdminDistrictNode[] = children.map((district) => ({
-          ...district,
-          neighborhoods: (childMap.get(district.id) ?? []).map((neighborhood) => ({
-            ...neighborhood,
-            subRegions: childMap.get(neighborhood.id) ?? [],
-          })),
-        }));
-
-        cities.push({
-          ...r,
-          districts,
-        });
-      } else {
-        // Çocuğu da yok, parent'ı da yok (eski veri)
-        if (r.villaCount > 0) {
-          orphans.push(r);
-        } else {
-          cities.push({ ...r, districts: [] });
-        }
-      }
-    }
-  });
-
-  return { cities, orphans };
+  return buildRegionTree(all);
 }
 
-/** Formlarda "Üst Bölge" seçebilmek için İl, İlçe ve Bölge opsiyonları getirir. */
-export async function getRegionParentOptions(): Promise<{ id: string; label: string; depth: number }[]> {
+export interface RegionParentOption {
+  id: string;
+  label: string;
+  depth: number;
+}
+
+/**
+ * "Üst Bölge" seçim listesi — ağaç sırasında, ekmek kırıntısı etiketiyle.
+ *
+ * @param excludeId Düzenlenen bölge. Kendisi ve TÜM alt ağacı listeden çıkarılır;
+ *   aksi hâlde kullanıcı bir bölgeyi kendi alt bölgesinin altına taşımayı
+ *   deneyip veritabanının `regions_no_cycle` hatasına çarpardı.
+ */
+export async function getRegionParentOptions(
+  excludeId?: string
+): Promise<RegionParentOption[]> {
   const all = await getAdminRegions();
-  const map = new Map(all.map((r) => [r.id, r]));
+  const byId = new Map(all.map((r) => [r.id, r]));
 
-  // Sadece depth < 3 (İl, İlçe, Bölge) olanlar üst bölge seçilebilir.
-  const parentable = all.filter((r) => r.depth < 3);
+  const { roots, orphans } = buildRegionTree(all);
+  const flat = [
+    ...flattenRegionTree(roots),
+    // Yetimler de üst seçilebilsin — ağacın dışında kalmaları veri hatası,
+    // kullanıcının onları düzeltebilmesi gerekiyor.
+    ...orphans.map((o) => ({ ...o, depth: 0 })),
+  ];
 
-  return parentable.map((r) => {
-    let label = r.name;
-    if (r.depth === 0) {
-      label = `${r.name} (İl)`;
-    } else if (r.depth === 1) {
-      const parent = r.parentId ? map.get(r.parentId) : null;
-      label = parent ? `${parent.name} > ${r.name} (İlçe)` : `${r.name} (İlçe)`;
-    } else if (r.depth === 2) {
-      const parent = r.parentId ? map.get(r.parentId) : null;
-      const grandParent = parent?.parentId ? map.get(parent.parentId) : null;
-      const prefix = [grandParent?.name, parent?.name].filter(Boolean).join(" > ");
-      label = prefix ? `${prefix} > ${r.name} (Bölge)` : `${r.name} (Bölge)`;
-    }
+  const blocked = excludeId
+    ? regionSubtreeIds(excludeId, all)
+    : new Set<string>();
 
-    return {
-      id: r.id,
-      label,
-      depth: r.depth,
-    };
-  });
+  return flat
+    // Bir bölge ancak çocuğu sınırı aşmayacaksa üst olabilir:
+    // çocuk derinliği = depth + 1 ≤ MAX_REGION_DEPTH.
+    .filter((r) => !blocked.has(r.id) && r.depth < MAX_REGION_DEPTH)
+    .map((r) => {
+      const chain = regionAncestors(r.id, byId).map((a) => a.name);
+      const path = [...chain, r.name].join(" › ");
+      return {
+        id: r.id,
+        label: `${path} (${regionLevelLabel(r.depth)})`,
+        depth: r.depth,
+      };
+    });
 }

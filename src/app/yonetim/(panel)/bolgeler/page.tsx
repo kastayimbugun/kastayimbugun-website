@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, MapPin } from "lucide-react";
 import { getAdminRegionTree } from "@/lib/data/admin/regions";
+import { flattenRegionTree } from "@/lib/regionTree";
 import { PageHeader, EmptyState } from "@/components/admin/ui/PageHeader";
 import { btnPrimary } from "@/components/admin/ui/styles";
 import RegionTreeClient from "@/components/admin/RegionTreeClient";
@@ -9,7 +10,10 @@ export const dynamic = "force-dynamic";
 
 export default async function BolgelerPage() {
   const tree = await getAdminRegionTree();
-  const totalCount = tree.cities.length + tree.orphans.length;
+  // Ağacın TAMAMI sayılır. Eskiden yalnızca kök sayısına bakılıyordu; derin
+  // bölgeler ağaca hiç girmediği için sayı da eksik çıkıyordu.
+  const totalCount =
+    flattenRegionTree(tree.roots).length + tree.orphans.length;
 
   const newButton = (
     <Link href="/yonetim/bolgeler/yeni" className={btnPrimary}>

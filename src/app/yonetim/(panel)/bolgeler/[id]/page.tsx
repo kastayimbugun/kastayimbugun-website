@@ -14,7 +14,10 @@ export default async function BolgeDetayPage({
   const { id } = await params;
   const [region, parentOptions] = await Promise.all([
     getAdminRegion(id),
-    getRegionParentOptions(),
+    // Bu bölgenin kendisi ve tüm alt ağacı üst konum listesinden çıkarılır:
+    // aksi hâlde kullanıcı döngü kuran bir seçim yapıp veritabanının
+    // `regions_no_cycle` hatasına çarpardı.
+    getRegionParentOptions(id),
   ]);
 
   if (!region) notFound();

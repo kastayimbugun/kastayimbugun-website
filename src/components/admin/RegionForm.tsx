@@ -15,7 +15,8 @@ import SaveBar from "@/components/admin/ui/SaveBar";
 import { useToast } from "@/components/admin/ui/Toast";
 import { useUnsavedGuard } from "@/components/admin/ui/useUnsavedGuard";
 import { inputCls } from "@/components/admin/ui/styles";
-import type { AdminRegion } from "@/lib/data/admin/regions";
+import { MAX_REGION_DEPTH, regionLevelLabel } from "@/lib/regionTree";
+import type { AdminRegion, RegionParentOption } from "@/lib/data/admin/regions";
 
 type FormState = {
   name: string;
@@ -43,7 +44,7 @@ export default function RegionForm({
 }: {
   region: AdminRegion | null;
   mode: "create" | "edit";
-  parentOptions?: { id: string; label: string; depth: number }[];
+  parentOptions?: RegionParentOption[];
   initialParentId?: string;
 }) {
   const router = useRouter();
@@ -69,21 +70,18 @@ export default function RegionForm({
     setErrors((p) => (k in p ? { ...p, [k]: "" } : p));
   };
 
-  // Kendisini ve varsa çocuklarını parent olarak seçmesini engelle
+  // Kendisi (ve sunucuda tüm alt ağacı) üst bölge olarak seçilemez — bir bölge
+  // kendi alt bölgesinin altına taşınırsa döngü oluşur, veritabanındaki
+  // `regions_no_cycle` trigger'ı yazmayı reddeder. Sunucu listeden zaten
+  // çıkarıyor; buradaki filtre ikinci emniyet.
   const availableParents = parentOptions.filter((p) => p.id !== region?.id);
 
-  // Seçili parent'a göre eklenen kaydın türü (İl, İlçe, Bölge)
+  // Seçili üst bölgeye göre bu kaydın seviyesi. Sabit dört seviye YOK: etiket
+  // derinlikten türetilir, sınır tek bir sabitten gelir.
   const selectedParent = availableParents.find((p) => p.id === f.parentId);
   const currentDepth = selectedParent ? selectedParent.depth + 1 : 0;
 
-  const levelName =
-    currentDepth === 0
-      ? "İl (Şehir)"
-      : currentDepth === 1
-      ? "İlçe"
-      : currentDepth === 2
-      ? "Bölge / Belde"
-      : "Alt Bölge / Özel Bölge / Mevki";
+  const levelName = regionLevelLabel(currentDepth);
 
   const submit = () => {
     setErrors({});
@@ -116,6 +114,19 @@ export default function RegionForm({
       if (res.fields && Object.keys(res.fields).length > 0) {
         setErrors(res.fields);
         toast.error("Bazı alanlar eksik veya hatalı — işaretli yerlere bakın.");
+        return;
+      }
+
+      // Sunucunun/veritabanının reddini sessizce yutma.
+      if (res.error === "cycle") {
+        const message =
+          "Bir bölge kendi alt bölgesinin altına taşınamaz. Başka bir üst konum seçin.";
+        setErrors({ parentId: message });
+        toast.error(message);
+      } else if (res.error === "depth") {
+        const message = `En fazla ${MAX_REGION_DEPTH + 1} kademe olabilir. Daha üst bir konum seçin.`;
+        setErrors({ parentId: message });
+        toast.error(message);
       } else {
         toast.error(
           res.error === "auth"
@@ -137,9 +148,9 @@ export default function RegionForm({
       <Section title={`${levelName} Bilgisi`}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Üst Konum (İl, İlçe veya Bölge)"
+            label="Üst Konum"
             error={errors.parentId}
-            hint="İl eklemek için boş bırakın. İlçe için İl, Bölge için İlçe, Alt Bölge/Mevki için Bölge (Örn: Kalkan) seçin."
+            hint={`İl eklemek için boş bırakın. Aksi hâlde bağlanacağı konumu seçin — liste her kademeyi gösterir (en fazla ${MAX_REGION_DEPTH + 1} kademe).`}
           >
             <select
               className={inputCls}

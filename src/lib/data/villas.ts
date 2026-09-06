@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { imageUrl } from "@/lib/images/url";
 import type { Villa, AmenityKey, PoolType } from "@/lib/types";
@@ -174,7 +175,15 @@ export async function getVillas(): Promise<Villa[]> {
   return (res.data as unknown as VillaRow[]).map(mapVilla);
 }
 
-export async function getVilla(slug: string): Promise<Villa | null> {
+/**
+ * Tek villa.
+ *
+ * React `cache()` ile sarılı: villa detay sayfası bunu istek başına İKİ kez
+ * çağırıyor (`generateMetadata` + render) ve sarmasız hâlde bu iki ayrı
+ * Supabase sorgusu demekti. 602 villa göç edecek, her sayfa görüntülemesinde
+ * bir sorgu bedavaya kazanılıyor. Aynı desen `getSiteSettings()`'te zaten var.
+ */
+export const getVilla = cache(async (slug: string): Promise<Villa | null> => {
   const run = (fields: string) =>
     supabaseServer()
       .from("villas")
@@ -190,17 +199,7 @@ export async function getVilla(slug: string): Promise<Villa | null> {
 
   if (res.error) throw new Error(`Villa okunamadı (${slug}): ${res.error.message}`);
   return res.data ? mapVilla(res.data as unknown as VillaRow) : null;
-}
-
-export async function getVillaSlugs(): Promise<string[]> {
-  const { data, error } = await supabaseServer()
-    .from("villas")
-    .select("slug")
-    .eq("status", "published");
-
-  if (error) throw new Error(`Villa slug'ları okunamadı: ${error.message}`);
-  return data.map((v) => v.slug);
-}
+});
 
 /**
  * Villa detayındaki "Benzer Villalar" — SQL'de 3'e daraltılır.
@@ -690,7 +689,8 @@ export interface Region {
   heroImage: string | null;
 }
 
-export async function getRegions(): Promise<Region[]> {
+/** Tüm bölgeler. `cache()`: kabuk, sayfa ve metadata aynı istekte çağırıyor. */
+export const getRegions = cache(async (): Promise<Region[]> => {
   const supabase = supabaseServer();
   const { data, error } = await supabase
     .from("regions")
@@ -738,7 +738,7 @@ export async function getRegions(): Promise<Region[]> {
       heroImage: imageUrl(r.hero_image),
     };
   });
-}
+});
 
 /**
  * Ana sayfadaki rozet ve kutucuk sayıları.

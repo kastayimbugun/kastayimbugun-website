@@ -37,8 +37,24 @@ const OPTIONS: sanitize.IOptions = {
   },
   // javascript:, data: gibi şemalar dışarıda kalır.
   allowedSchemes: ["http", "https", "mailto", "tel"],
-  // Dış bağlantılar yeni sekmede açılırken opener sızıntısı olmasın.
   transformTags: {
+    /**
+     * Panelden gelen `<h1>` `<h2>`ye indirilir.
+     *
+     * Sayfanın `<h1>`'i şablonun işidir; içerik editöründen gelen başlıklar
+     * onun ALTINDA yer almalı. `kiralama-kosullari` içeriği eski siteden
+     * yapıştırıldığı için kendi bölüm başlıklarını `<h1>` yazıyordu ve sayfa
+     * **22 adet `<h1>`** basıyordu — arama motoru için sayfanın konusu
+     * belirsiz hâle geliyor.
+     *
+     * Düzeltme render sırasında değil BURADA yapılıyor: KVKK, Gizlilik ve
+     * Mesafeli Satış metinleri de aynı yoldan yapıştırılacak; tek tek sayfa
+     * bileşenlerinde düzeltmek aynı hatayı her yeni sayfada tekrar ederdi.
+     * Editörden `h1` seçeneğini kaldırmak da tamamlayıcı bir adım, ama bu
+     * kural ZATEN KAYITLI içeriği de düzeltir.
+     */
+    h1: "h2",
+    // Dış bağlantılar yeni sekmede açılırken opener sızıntısı olmasın.
     a: (tagName, attribs) => ({
       tagName,
       attribs: {
